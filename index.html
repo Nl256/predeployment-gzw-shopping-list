@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pre-Deployment | GZW shopping list</title><link rel="icon" href="logo.png"><link rel="stylesheet" href="styles.css"></head>
+<body class="editor">
+<header class="topbar"><a class="brand" href=""><img src="logo.png" alt="Pre-Deployment"><span>PRE-DEPLOYMENT<small>FIELD OPERATIONS / GZW</small></span></a><div class="connection" id="status" role="status">Connecting…</div></header>
+<main class="workspace">
+<div class="intro"><div><p class="eyebrow">YOUR LOADOUT. YOUR NEXT RUN.</p><h1>Shopping list<span>.</span></h1><p class="muted">Plan it here. Find it out there.</p></div><button id="copyUrl" class="button primary">↗ Copy OBS URL</button></div>
+<div class="layout">
+<section class="control-column">
+<section class="panel list-panel"><div class="panel-heading"><h2><span class="section-number">01</span> Requisition list</h2><span id="count" class="badge">0 ITEMS</span></div>
+<form id="addForm" class="add-form"><label class="grow">Item name<input id="itemName" maxlength="100" placeholder="What do you need?" required autocomplete="off"></label><label class="quantity-field">Qty<input id="itemQty" type="number" min="1" max="9999" value="1" required></label><button class="button primary" type="submit">+ Add item</button></form>
+<div class="list-summary"><span id="progressText">Ready for your first item</span><span>COLLECTED / NEEDED</span></div>
+<div id="items"></div>
+<div class="list-footer"><button class="text-button" id="clearDone">Clear collected</button><button class="text-button" id="undo" disabled>Undo last change</button></div></section>
+<section class="panel"><div class="panel-heading"><h2><span class="section-number">02</span> Overlay appearance</h2><span class="badge">LIVE</span></div>
+<div class="settings-grid"><label>Overlay title<input id="title" maxlength="50"></label><label>Subtitle<input id="subtitle" maxlength="80"></label>
+<label>Accent color<div class="color-control"><input id="accent" type="color"><span>Match your stream</span></div></label>
+<label>Panel opacity <output id="opacityValue"></output><input id="opacity" type="range" min="0" max="100"></label>
+<label>Text size <output id="fontSizeValue"></output><input id="fontSize" type="range" min="16" max="34"></label>
+<label>Logo size <output id="logoSizeValue"></output><input id="logoSize" type="range" min="70" max="200"></label>
+<label>Items per page<select id="rows"><option value="4">4 items</option><option value="5">5 items</option><option value="6">6 items</option><option value="7">7 items</option><option value="8">8 items</option><option value="10">10 items</option></select></label>
+<label class="check-label"><input id="hideCompleted" type="checkbox"> Hide collected items</label></div>
+<div class="font-box"><div><h3>Make it your type.</h3><p>Import a font for your overlay. TTF, OTF, WOFF or WOFF2 · up to 2 MB.</p><span id="fontName" class="font-name">Default tactical</span></div><div class="font-actions"><label class="button secondary" for="fontFile">↑ Import font</label><input id="fontFile" type="file" accept=".ttf,.otf,.woff,.woff2" class="file-input"><button id="resetFont" class="text-button">Use default</button></div></div>
+</section>
+<details class="panel setup"><summary><span class="section-number">03</span> Add to OBS / Streamlabs <span>+</span></summary><ol><li>Open your private control link. No launcher or installation is needed.</li><li>Add a <strong>Browser Source</strong>. Leave <strong>Local file</strong> unchecked.</li><li>Paste <code id="obsUrl"></code></li><li>Set width to <strong>600</strong> and height to <strong>1080</strong>. Resize it in your scene.</li><li>Edit this page while you play. Changes appear automatically.</li></ol><p>The area outside the panel is transparent. Long lists cycle through pages every 10 seconds. Lists and fonts are saved online. Keep your control link private; the OBS link is read-only.</p><div class="backup-actions"><button class="button secondary" id="exportList">Export list</button><label for="importList" class="button secondary">Import list</label><input id="importList" type="file" accept=".json" class="file-input"></div><p>List exports include appearance settings. Imported fonts stay saved online. List imports keep your current font.</p></details>
+</section>
+<aside class="preview-column"><div class="preview-heading"><h2>On-stream preview</h2><span class="live-dot">LIVE</span></div><div class="preview-stage"><iframe id="preview" src="about:blank" title="Live shopping list overlay"></iframe></div><div class="preview-caption"><span>TRANSPARENT BACKGROUND</span><a href="overlay.html" target="_blank" rel="noopener">Open overlay ↗</a></div><p class="preview-note">Only the overlay is shown on stream.<br>Your controls stay right here.</p></aside>
+</div><footer class="page-footer">PRE-DEPLOYMENT <span>PREPARE. DEPLOY. RETURN.</span><span>CLOUD SYNC / PRE-DEPLOYMENT</span></footer></main>
+<div id="toast" class="toast" role="status" hidden></div><script type="module" src="app.js"></script></body></html>
