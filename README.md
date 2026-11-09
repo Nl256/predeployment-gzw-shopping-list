@@ -4,7 +4,7 @@ Manual shopping-list controls and a transparent OBS/Streamlabs overlay. The site
 
 ## Use
 
-Open your private control link. Add names, quantities and optional notes. Use + / - to update collected counts, check an item off, reorder it or remove it. Appearance changes save automatically. Import a TTF, OTF, WOFF or WOFF2 font (maximum 2 MB).
+Open your private control link. Add names, quantities and optional notes. Use + / - to update collected counts, check an item off, reorder it or remove it. Appearance changes save automatically. Set independent accent/border, background, title, item text, notes, quantity, subtitle and footer colors using swatches or hex values. Reset colors restores the original palette without changing the list, font or opacity. Import a TTF, OTF, WOFF or WOFF2 font (maximum 2 MB).
 
 Click **Copy OBS URL**, add a Browser Source in OBS/Streamlabs, leave Local file unchecked, paste the URL and set **600 × 1080**. The overlay checks for changes every four seconds. Long lists rotate pages every ten seconds, and the panel scales to fit the source. Internet access is required; the editor does not have to remain open.
 

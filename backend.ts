@@ -27,6 +27,11 @@ Deno.serve(async(req:Request)=>{
    const raw=await req.text();if(raw.length>180000)return json({error:'List is too large.'},413);
    const s=JSON.parse(raw);if(!Array.isArray(s.items)||s.items.length>200)return json({error:'Maximum 200 items.'},400);
    const state={title:clip(s.title,50),subtitle:clip(s.subtitle,80),accent:/^#[0-9a-f]{6}$/i.test(s.accent)?s.accent:'#b9bd76',opacity:number(s.opacity,0,100),fontSize:number(s.fontSize,16,34),logoSize:number(s.logoSize,70,200),rows:number(s.rows,4,10),hideCompleted:s.hideCompleted===true,fontVersion:s.fontVersion===row.font_version?s.fontVersion:'',fontName:clip(s.fontName,100),items:s.items.filter((i:any)=>i&&typeof i.name==='string'&&i.name.trim()).map((i:any)=>({id:clip(i.id,60),name:clip(i.name,100),note:clip(i.note,160),qty:number(i.qty,1,9999),have:number(i.have,0,number(i.qty,1,9999))}))};
+   const colorDefaults={"accent":"#b9bd76","backgroundColor":"#0d120d","titleColor":"#f3f0e2","textColor":"#f3f0e2","noteColor":"#adb5a4","quantityColor":"#b9bd76","subtitleColor":"#b9bd76","footerColor":"#9aa68b"};
+   for(const [name,fallback] of Object.entries(colorDefaults)){
+    const candidate=s[name]??row.state[name];
+    (state as Record<string,unknown>)[name]=/^#[0-9a-f]{6}$/i.test(candidate)?candidate.toLowerCase():fallback;
+   }
    await db(`shopping_lists?id=eq.${row.id}`,{method:'PATCH',body:JSON.stringify({state,updated_at:new Date().toISOString()})});return json({ok:true});
   }
   if(action==='font'){

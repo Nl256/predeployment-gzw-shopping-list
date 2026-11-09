@@ -1,4 +1,4 @@
-import {DEFAULTS,normalize,request,node,clamp} from './shared.js';
+import {COLOR_DEFAULTS,DEFAULTS,normalize,request,node,clamp} from './shared.js';
 const $=id=>document.getElementById(id);
 const params=new URLSearchParams(location.hash.slice(1)),key=params.get('edit'),view=params.get('view');
 let state=normalize(),previous=null,dirty=false,saving=false,timer,toastTimer;
@@ -38,7 +38,8 @@ function renderItems(){
   actions.append(up,down,del);side.append(stepper,actions);row.append(toggle,details,side);target.append(row);
  });
 }
-function renderSettings(){for(const k of ['title','subtitle','accent','opacity','fontSize','logoSize','rows'])$(k).value=state[k];$('hideCompleted').checked=state.hideCompleted;$('fontName').textContent=state.fontName;renderOutputs()}
+function renderSettings(){for(const k of ['title','subtitle','opacity','fontSize','logoSize','rows'])$(k).value=state[k];$('hideCompleted').checked=state.hideCompleted;$('fontName').textContent=state.fontName;renderColors();renderOutputs()}
+function renderColors(){for(const k of Object.keys(COLOR_DEFAULTS)){$(k).value=state[k];$(k+'Hex').value=state[k];$(k+'Hex').setCustomValidity('')}}
 function renderOutputs(){for(const k of ['opacity','fontSize','logoSize'])$(k+'Value').textContent=state[k]+(k==='opacity'?'%':'px')}
 async function init(){
  document.querySelector('.brand').href=location.href;
@@ -54,7 +55,13 @@ async function init(){
  $('addForm').addEventListener('submit',e=>{e.preventDefault();const name=$('itemName').value.trim();if(!name)return;if(state.items.length>=200){notify('Maximum 200 items. Remove an item first.');return}snapshot();state.items.push({id:crypto.randomUUID(),name,note:'',qty:Math.round(clamp($('itemQty').value,1,9999,1)),have:0});$('itemName').value='';$('itemQty').value=1;changed();renderItems();$('itemName').focus()});
  $('undo').onclick=()=>{if(!previous)return;const swap=state;state=previous;previous=swap;changed();renderItems();renderSettings()};
  $('clearDone').onclick=()=>{snapshot();state.items=state.items.filter(i=>i.have<i.qty);changed();renderItems()};
- for(const k of ['title','subtitle','accent','opacity','fontSize','logoSize','rows','hideCompleted'])$(k).addEventListener('input',()=>{snapshot();state[k]=k==='hideCompleted'?$(k).checked:['opacity','fontSize','logoSize','rows'].includes(k)?Number($(k).value):$(k).value;renderOutputs();changed()});
+ for(const k of ['title','subtitle','opacity','fontSize','logoSize','rows','hideCompleted'])$(k).addEventListener('input',()=>{snapshot();state[k]=k==='hideCompleted'?$(k).checked:['opacity','fontSize','logoSize','rows'].includes(k)?Number($(k).value):$(k).value;renderOutputs();changed()});
+ for(const k of Object.keys(COLOR_DEFAULTS)){
+  $(k).addEventListener('input',()=>{snapshot();state[k]=$(k).value;$(k+'Hex').value=state[k];$(k+'Hex').setCustomValidity('');changed()});
+  $(k+'Hex').addEventListener('input',()=>{const value=$(k+'Hex').value.trim();const valid=/^#[0-9a-f]{6}$/i.test(value);$(k+'Hex').setCustomValidity(valid?'':'Enter a six-digit hex color, such as #b9bd76.');if(valid){snapshot();state[k]=value.toLowerCase();$(k).value=state[k];changed()}});
+  $(k+'Hex').addEventListener('blur',()=>{if(!$(k+'Hex').checkValidity()){$(k+'Hex').value=state[k];$(k+'Hex').setCustomValidity('');notify('Use a six-digit hex color, such as #b9bd76.')}});
+ }
+ $('resetColors').onclick=()=>{snapshot();Object.assign(state,COLOR_DEFAULTS);renderColors();changed();notify('Overlay colors reset. Other settings kept.')};
  $('copyUrl').onclick=async()=>{try{await navigator.clipboard.writeText(overlayUrl.href);notify('OBS URL copied. Use a 600 × 1080 browser source.')}catch{notify('Copy the URL from the OBS setup section below.');document.querySelector('details').open=true}};
  $('fontFile').onchange=async()=>{
   const file=$('fontFile').files[0];if(!file)return;const ext=file.name.split('.').pop().toLowerCase();

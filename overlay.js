@@ -5,7 +5,10 @@ let state=normalize(),page=0,last='',loadedVersion='',fontGeneration=0;
 function fit(){const card=$('overlayCard');card.style.width='576px';card.style.transform='none';const scale=Math.min((innerWidth-24)/576,(innerHeight-24)/card.offsetHeight,1);card.style.transform=`scale(${Math.max(.1,scale)})`}
 function render(){
  document.documentElement.style.setProperty('--accent',state.accent);
- $('overlayCard').style.background=`rgba(13,18,13,${state.opacity/100})`;
+ for(const [css,key] of Object.entries({'--title-color':'titleColor','--item-color':'textColor','--note-color':'noteColor','--quantity-color':'quantityColor','--subtitle-color':'subtitleColor','--footer-color':'footerColor'}))document.documentElement.style.setProperty(css,state[key]);
+ const rgb=[1,3,5].map(i=>parseInt(state.backgroundColor.slice(i,i+2),16));
+ $('overlayCard').style.background=`rgba(${rgb.join(',')},${state.opacity/100})`;
+ $('overlayCard').style.borderColor=state.accent+'55';$('overlayCard').style.borderTopColor=state.accent;
  $('overlayTitle').textContent=state.title||'SHOPPING LIST';$('overlaySubtitle').textContent=state.subtitle;$('overlayLogo').style.height=state.logoSize+'px';
  const items=state.items.filter(i=>!state.hideCompleted||i.have<i.qty),pages=Math.max(1,Math.ceil(items.length/state.rows));page%=pages;
  const list=$('overlayItems');list.replaceChildren();
