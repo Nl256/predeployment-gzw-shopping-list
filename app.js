@@ -1,20 +1,26 @@
 import {COLOR_DEFAULTS,DEFAULTS,normalize,request,node,clamp} from './shared.js';
+import {LOCAL_KEY,readLocal,writeLocal,putFont,getFont,toBase64,fromBase64} from './storage.js';
+import {connection,startConnection,syncOBS,disconnectOBS} from './obs-sync.js';
 const $=id=>document.getElementById(id);
-const params=new URLSearchParams(location.hash.slice(1)),key=params.get('edit'),view=params.get('view');
-let state=normalize(),previous=null,dirty=false,saving=false,timer,toastTimer;
-const cacheKey='predeployment-draft-'+(key||'none');
-function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4500)}
+const legacy=new URLSearchParams(location.hash.slice(1)),legacyKey=legacy.get('edit');
+let state=normalize(),previous=null,dirty=false,saving=false,timer,toastTimer,revision='';
+function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5500)}
 function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error)}
-const overlayUrl=new URL('overlay.html',location.href);overlayUrl.hash=new URLSearchParams({view:view||''}).toString();
 function snapshot(){previous=structuredClone(state);$('undo').disabled=false}
 function preview(){document.documentElement.style.setProperty('--accent',state.accent);$('preview').contentWindow?.postMessage({type:'preview-state',state},location.origin)}
-function localCache(){try{localStorage.setItem(cacheKey,JSON.stringify({pending:dirty,state}))}catch{}}
-function changed(){dirty=true;localCache();preview();status('Saving…');clearTimeout(timer);timer=setTimeout(save,300)}
-async function save(){
- if(saving||!dirty)return;saving=true;dirty=false;const current=JSON.stringify(state);
- try{await request('state',key,{method:'POST',headers:{'Content-Type':'application/json'},body:current});status(dirty?'Saving…':'Saved · live sync');localCache()}
- catch(e){dirty=true;status('Not synced · retrying',true);notify(e.message)}
- finally{saving=false;if(dirty){clearTimeout(timer);timer=setTimeout(save,3000)}}
+function overlayURL(){const c=connection();if(!c?.created)return '';const url=new URL('overlay.html',location.href);url.hash=new URLSearchParams({view:c.view});return url.href;}
+function updateConnectionUI(){const c=connection();const url=overlayURL();$('copyUrl').textContent=url?'↗ Copy OBS URL':'↗ Connect OBS';$('connectOBS').textContent=c?'Sync now':'Connect my OBS overlay';$('disconnectOBS').hidden=!c;$('obsUrl').textContent=url||'Connect OBS to create your own private overlay URL.';$('obsConnection').textContent=c?(c.syncedRevision===revision?'Connected · your overlay is up to date.':'Your list is saved locally. OBS is waiting for the latest changes.'):'Optional: sends a copy of this browser’s list and font online for your private OBS overlay.';}
+function changed(){
+ preview();dirty=true;try{const doc=readLocal()||{schema:2,connection:null};revision=crypto.randomUUID();writeLocal({...doc,state,revision});dirty=false;status('Saved on this device');updateConnectionUI();queueSync();}catch(e){status('Local save failed · export a backup',true);notify(e.message||'Browser storage is unavailable. Export a backup before closing.');}
+}
+function queueSync(delay=500){clearTimeout(timer);if(connection())timer=setTimeout(save,delay)}
+async function save(){if(saving||dirty||!connection())return;saving=true;status('Saved locally · syncing OBS…');try{await syncOBS();const doc=readLocal();status('Saved locally · OBS connected');updateConnectionUI();if(doc.connection?.syncedRevision!==doc.revision)queueSync();}catch(e){status('Saved locally · OBS offline',true);$('obsConnection').textContent=e.message+' Your local save is safe; retrying.';queueSync(10000)}finally{saving=false}}
+function download(value,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([value],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+async function importState(raw,font){
+ const next=normalize(raw);if(!Array.isArray(raw?.items))throw new Error('Choose an exported shopping list.');
+ if(font){if(!['ttf','otf','woff','woff2'].includes(font.ext))throw new Error('Invalid font format in backup.');const bytes=fromBase64(font.data);await new FontFace('BackupValidation',bytes).load();next.fontVersion=crypto.randomUUID();next.fontName=String(font.name||next.fontName).slice(0,100);await putFont(next.fontVersion,{bytes,ext:font.ext,name:next.fontName});}
+ else if(next.fontVersion&&!(await getFont(next.fontVersion))){next.fontVersion='';next.fontName=DEFAULTS.fontName;}
+ snapshot();state=next;renderItems();renderSettings();changed();
 }
 function actionButton(label,fn){const b=node('button','',label);b.type='button';b.addEventListener('click',fn);return b}
 function renderItems(){
@@ -42,16 +48,22 @@ function renderSettings(){for(const k of ['title','subtitle','opacity','fontSize
 function renderColors(){for(const k of Object.keys(COLOR_DEFAULTS)){$(k).value=state[k];$(k+'Hex').value=state[k];$(k+'Hex').setCustomValidity('')}}
 function renderOutputs(){for(const k of ['opacity','fontSize','logoSize'])$(k+'Value').textContent=state[k]+(k==='opacity'?'%':'px')}
 async function init(){
- document.querySelector('.brand').href=location.href;
- if(!/^[a-f0-9]{64}$/.test(key||'')||!/^[a-f0-9]{64}$/.test(view||'')){
-  document.body.replaceChildren();const welcome=node('main','welcome panel');const logo=node('img');logo.src='logo.png';logo.alt='Pre-Deployment';welcome.append(logo,node('h1','','Your next deployment starts here.'),node('p','','Open the private control link supplied with this overlay to manage the shopping list. The regular site address does not grant access to a list.'));document.body.append(welcome);return;
- }
- $('obsUrl').textContent=overlayUrl.href;document.querySelector('.preview-caption a').href=overlayUrl.href;
- $('preview').src=overlayUrl.href.replace('#','?preview=1#');$('preview').addEventListener('load',preview);
+ document.querySelector('.brand').href=new URL('./',location.href).href;
  document.querySelectorAll('input,select,button').forEach(e=>e.disabled=true);
- try{state=normalize(await(await request('state',key)).json());const draft=JSON.parse(localStorage.getItem(cacheKey)||'null');if(draft?.pending){state=normalize(draft.state);dirty=true;notify('Restored unsynced changes. Retrying now.')}status('Saved · live sync')}
- catch(e){status('Connection unavailable',true);notify(e.message);const draft=JSON.parse(localStorage.getItem(cacheKey)||'null');if(draft){state=normalize(draft.state);dirty=!!draft.pending}else{const retry=node('button','button primary','Retry connection');retry.onclick=()=>location.reload();document.querySelector('.intro').append(retry);return}}
- document.querySelectorAll('input,select,button').forEach(e=>e.disabled=false);$('undo').disabled=true;renderItems();renderSettings();preview();if(dirty)save();
+ try{let doc=readLocal();if(!doc){doc={schema:2,state:normalize(),revision:crypto.randomUUID(),connection:null};writeLocal(doc);}state=normalize(doc.state);revision=doc.revision;status('Saved on this device');}
+ catch(e){status('Local storage unavailable',true);$('storageNotice').textContent=e.message+' Your existing save has not been replaced.';const recovery=node('button','button secondary','Download recovery copy');recovery.onclick=()=>download(localStorage.getItem(LOCAL_KEY)||'{}','shopping-list-recovery.json');$('storageNotice').append(recovery);return;}
+ document.querySelectorAll('input,select,button').forEach(e=>e.disabled=false);$('undo').disabled=true;
+ $('preview').src='overlay.html?preview=1&local=1';$('preview').addEventListener('load',preview);
+ window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===$('preview').contentWindow&&e.data?.type==='preview-ready')preview()});
+ document.querySelector('.preview-caption a').href='overlay.html?local=1';renderItems();renderSettings();preview();updateConnectionUI();queueSync();
+ if(/^[a-f0-9]{64}$/.test(legacyKey||'')){$('legacyNotice').hidden=false;history.replaceState(null,'',location.pathname+location.search);}
+ $('skipLegacy').onclick=()=>{$('legacyNotice').hidden=true};
+ $('importLegacy').onclick=async()=>{const button=$('importLegacy');button.disabled=true;try{
+  let raw;try{const draft=JSON.parse(localStorage.getItem('predeployment-draft-'+legacyKey)||'null');if(draft?.pending)raw=draft.state;}catch{}
+  if(!raw)raw=await(await request('state',legacyKey)).json();let font=null;
+  if(raw.fontVersion){const r=await request('font',legacyKey);const bytes=await r.arrayBuffer();const ext=(r.headers.get('Content-Type')||'font/ttf').split('/')[1].split(';')[0];font={ext,name:raw.fontName,data:toBase64(bytes)};}
+  await importState(raw,font);$('legacyNotice').hidden=true;notify('Copied into this browser. Future edits are yours alone.');
+ }catch(e){notify('Could not copy the old list: '+e.message)}finally{button.disabled=false}};
  $('addForm').addEventListener('submit',e=>{e.preventDefault();const name=$('itemName').value.trim();if(!name)return;if(state.items.length>=200){notify('Maximum 200 items. Remove an item first.');return}snapshot();state.items.push({id:crypto.randomUUID(),name,note:'',qty:Math.round(clamp($('itemQty').value,1,9999,1)),have:0});$('itemName').value='';$('itemQty').value=1;changed();renderItems();$('itemName').focus()});
  $('undo').onclick=()=>{if(!previous)return;const swap=state;state=previous;previous=swap;changed();renderItems();renderSettings()};
  $('clearDone').onclick=()=>{snapshot();state.items=state.items.filter(i=>i.have<i.qty);changed();renderItems()};
@@ -62,17 +74,16 @@ async function init(){
   $(k+'Hex').addEventListener('blur',()=>{if(!$(k+'Hex').checkValidity()){$(k+'Hex').value=state[k];$(k+'Hex').setCustomValidity('');notify('Use a six-digit hex color, such as #b9bd76.')}});
  }
  $('resetColors').onclick=()=>{snapshot();Object.assign(state,COLOR_DEFAULTS);renderColors();changed();notify('Overlay colors reset. Other settings kept.')};
- $('copyUrl').onclick=async()=>{try{await navigator.clipboard.writeText(overlayUrl.href);notify('OBS URL copied. Use a 600 × 1080 browser source.')}catch{notify('Copy the URL from the OBS setup section below.');document.querySelector('details').open=true}};
- $('fontFile').onchange=async()=>{
-  const file=$('fontFile').files[0];if(!file)return;const ext=file.name.split('.').pop().toLowerCase();
-  if(!['ttf','otf','woff','woff2'].includes(ext)||file.size>2097152){notify('Choose a TTF, OTF, WOFF or WOFF2 font under 2 MB.');$('fontFile').value='';return}
-  $('fontFile').disabled=true;status('Importing font…');
-  try{const bytes=await file.arrayBuffer();await new FontFace('FontValidation',bytes).load();const result=await(await request('font',key,{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Font-Extension':ext},body:bytes})).json();snapshot();state.fontVersion=result.version;state.fontName=file.name;renderSettings();changed();notify('Font imported. Your OBS overlay will update automatically.')}
-  catch(e){notify('Font import failed: '+e.message);status('Font not imported',true)}finally{$('fontFile').value='';$('fontFile').disabled=false}
- };
+
+ async function connectAndCopy(copy){$('copyUrl').disabled=true;$('connectOBS').disabled=true;try{if(dirty)throw new Error('Export a backup: local storage is unavailable.');startConnection();updateConnectionUI();await syncOBS();updateConnectionUI();status('Saved locally · OBS connected');if(copy){try{await navigator.clipboard.writeText(overlayURL());notify('Your private OBS URL is copied. Use a 600 × 1080 browser source.')}catch{document.querySelector('details.setup').open=true;notify('Your OBS link is ready in the setup section.')}}else notify('Your personal OBS overlay is connected.');}catch(e){notify(e.message);status('Saved locally · OBS waiting',true);queueSync(10000)}finally{$('copyUrl').disabled=false;$('connectOBS').disabled=false}}
+ $('copyUrl').onclick=()=>connectAndCopy(true);$('connectOBS').onclick=()=>connectAndCopy(false);
+ $('disconnectOBS').onclick=async()=>{clearTimeout(timer);$('disconnectOBS').disabled=true;try{await disconnectOBS();status('Saved on this device');updateConnectionUI();notify('OBS disconnected. Your local list and font are kept.')}catch(e){notify('Reconnect to the internet to disconnect OBS. '+e.message);queueSync(10000)}finally{$('disconnectOBS').disabled=false}};
+ $('fontFile').onchange=async()=>{const file=$('fontFile').files[0];if(!file)return;const ext=file.name.split('.').pop().toLowerCase();if(!['ttf','otf','woff','woff2'].includes(ext)||file.size>2097152){notify('Choose a supported font under 2 MB.');$('fontFile').value='';return}$('fontFile').disabled=true;try{const bytes=await file.arrayBuffer();await new FontFace('FontValidation',bytes).load();const version=crypto.randomUUID();await putFont(version,{bytes,ext,name:file.name});snapshot();state.fontVersion=version;state.fontName=file.name;renderSettings();changed();notify('Font saved on this device.')}catch(e){notify('Font import failed: '+e.message)}finally{$('fontFile').value='';$('fontFile').disabled=false}};
  $('resetFont').onclick=()=>{snapshot();state.fontVersion='';state.fontName=DEFAULTS.fontName;changed();renderSettings()};
- $('exportList').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}));a.download='predeployment-list.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
- $('importList').onchange=async()=>{const file=$('importList').files[0];if(!file)return;try{if(file.size>262144)throw new Error('File is too large.');const raw=JSON.parse(await file.text());if(!Array.isArray(raw.items))throw new Error('Choose an exported shopping list.');snapshot();state=normalize({...raw,fontVersion:state.fontVersion,fontName:state.fontName});changed();renderItems();renderSettings();notify('List imported. Current font preserved.')}catch(e){notify(e.message)}finally{$('importList').value=''}};
- window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue=''}});
+ $('exportList').onclick=async()=>{try{const saved=state.fontVersion?await getFont(state.fontVersion):null;if(state.fontVersion&&!saved)throw new Error('Re-import your font before exporting a complete backup.');const font=saved?{name:saved.name,ext:saved.ext,data:toBase64(saved.bytes)}:null;download(JSON.stringify({format:'predeployment-shopping-list',version:2,state,font},null,2),'predeployment-backup.json');notify('Backup includes your list, appearance and custom font.')}catch(e){notify(e.message)}};
+ $('importList').onchange=async()=>{const file=$('importList').files[0];if(!file)return;try{if(file.size>3200000)throw new Error('Backup is too large.');const raw=JSON.parse(await file.text());await importState(raw.state||raw,raw.font||null);notify('Backup restored into this browser.')}catch(e){notify(e.message)}finally{$('importList').value=''}};
+ window.addEventListener('storage',e=>{if(e.key!==LOCAL_KEY)return;try{const doc=readLocal();if(!doc){location.reload();return}if(doc.revision!==revision&&!dirty){state=normalize(doc.state);revision=doc.revision;previous=null;$('undo').disabled=true;renderItems();renderSettings();preview();}updateConnectionUI();}catch(e){status('Could not read local changes',true)}});
+ window.addEventListener('online',()=>queueSync(0));window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+ if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
-init().catch(e=>{status('Could not open controls',true);notify(e.message)});
+init().catch(e=>{status('Could not open local save',true);notify(e.message)});

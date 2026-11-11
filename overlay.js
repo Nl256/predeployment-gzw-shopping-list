@@ -1,6 +1,7 @@
 import {normalize,request,node,loadFont} from './shared.js';
+import {LOCAL_KEY,readLocal} from './storage.js';
 const $=id=>document.getElementById(id),params=new URLSearchParams(location.hash.slice(1));
-const key=params.get('view')||'',isPreview=new URLSearchParams(location.search).has('preview');
+const key=params.get('view')||'',isPreview=new URLSearchParams(location.search).has('preview'),isLocal=isPreview||new URLSearchParams(location.search).has('local');
 let state=normalize(),page=0,last='',loadedVersion='',fontGeneration=0;
 function fit(){const card=$('overlayCard');card.style.width='576px';card.style.transform='none';const scale=Math.min((innerWidth-24)/576,(innerHeight-24)/card.offsetHeight,1);card.style.transform=`scale(${Math.max(.1,scale)})`}
 function render(){
@@ -21,10 +22,11 @@ function render(){
  const total=state.items.reduce((n,i)=>n+i.qty,0),have=state.items.reduce((n,i)=>n+i.have,0);
  $('overlayProgress').textContent=total?`${have} / ${total} SUPPLIES COLLECTED`:'PREPARE. DEPLOY. RETURN.';
  $('overlayPage').textContent=pages>1?`${page+1} / ${pages}`:'GZW';$('overlayBar').style.width=(total?have/total*100:0)+'%';requestAnimationFrame(fit);
- if(loadedVersion!==state.fontVersion){loadedVersion=state.fontVersion;const generation=++fontGeneration;document.body.style.setProperty('--overlay-font','var(--display)');if(state.fontVersion)loadFont(state.fontVersion,key).then(()=>{if(generation===fontGeneration){document.body.style.setProperty('--overlay-font',"'ImportedOverlay', sans-serif");fit()}}).catch(()=>{if(generation===fontGeneration)loadedVersion=''})}
+ if(loadedVersion!==state.fontVersion){loadedVersion=state.fontVersion;const generation=++fontGeneration;document.body.style.setProperty('--overlay-font','var(--display)');if(state.fontVersion)loadFont(state.fontVersion,isLocal?null:key).then(()=>{if(generation===fontGeneration){document.body.style.setProperty('--overlay-font',"'ImportedOverlay', sans-serif");fit()}}).catch(()=>{if(generation===fontGeneration)loadedVersion=''})}
 }
 function update(raw){const next=JSON.stringify(raw);if(next===last)return;last=next;state=normalize(raw);render()}
 async function poll(){try{update(await(await request('state',key)).json());document.querySelector('.offline')?.remove()}catch{if(!isPreview&&!document.querySelector('.offline'))document.body.append(node('div','offline','SYNC OFFLINE · reconnecting'))}finally{if(!isPreview)setTimeout(poll,4000)}}
 window.addEventListener('resize',fit);$('overlayLogo').addEventListener('load',fit);
-if(isPreview){window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===parent&&e.data?.type==='preview-state')update(e.data.state)})}
-if(/^[a-f0-9]{64}$/.test(key)){render();poll();setInterval(()=>{page++;render()},10000)}else{document.body.classList.add('error-view');document.body.append(node('div','offline','Open the OBS URL copied from your control page.'))}
+if(isPreview){window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===parent&&e.data?.type==='preview-state')update(e.data.state)});parent.postMessage({type:'preview-ready'},location.origin);}
+if(isLocal){try{update(readLocal()?.state||{});}catch{render();}window.addEventListener('storage',e=>{if(e.key===LOCAL_KEY)try{update(readLocal()?.state||{});}catch{}});setInterval(()=>{page++;render()},10000);}
+else if(/^[a-f0-9]{64}$/.test(key)){render();poll();setInterval(()=>{page++;render()},10000)}else{document.body.classList.add('error-view');document.body.append(node('div','offline','Connect OBS from your shopping list and copy its URL.'))}

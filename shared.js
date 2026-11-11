@@ -13,13 +13,13 @@ export function normalize(raw={}){
  return s;
 }
 export async function request(action,key,{method='GET',body,headers={}}={}){
- const response=await fetch(`${API}?action=${action}`,{method,headers:{'X-List-Key':key,...headers},body,cache:'no-store'});
+ const response=await fetch(`${API}?action=${action}`,{method,headers:{'X-List-Key':key,...headers},body,cache:'no-store',signal:AbortSignal.timeout(12000)});
  if(!response.ok){const error=await response.json().catch(()=>({error:'Connection failed'}));throw new Error(error.error||`Request failed (${response.status})`)}
  return response;
 }
 export function node(tag,className,content){const e=document.createElement(tag);if(className)e.className=className;if(content!==undefined)e.textContent=content;return e;}
 export async function loadFont(version,key){
  if(!version)return null;
- const r=await request('font',key);
- const font=new FontFace('ImportedOverlay',await r.arrayBuffer());await font.load();document.fonts.add(font);return font;
+ let bytes;if(key){const r=await request('font',key);bytes=await r.arrayBuffer();}else{const {getFont}=await import('./storage.js');const saved=await getFont(version);if(!saved)throw new Error('Saved font not found.');bytes=saved.bytes;}
+ const font=new FontFace('ImportedOverlay',bytes);await font.load();document.fonts.add(font);return font;
 }

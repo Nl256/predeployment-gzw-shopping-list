@@ -1,0 +1,10 @@
+export const LOCAL_KEY='predeployment-shopping-list-v2';
+export function readLocal(){const raw=localStorage.getItem(LOCAL_KEY);if(!raw)return null;const value=JSON.parse(raw);if(value?.schema!==2||!value.state||typeof value.state!=='object')throw new Error('Your local save could not be read. Export or recover it before replacing it.');return value;}
+export function writeLocal(value){localStorage.setItem(LOCAL_KEY,JSON.stringify(value));}
+export function newKey(){return Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');}
+let dbPromise;
+function openFonts(){if(!dbPromise)dbPromise=new Promise((resolve,reject)=>{const r=indexedDB.open('predeployment-shopping-list-fonts',1);r.onupgradeneeded=()=>r.result.createObjectStore('fonts');r.onsuccess=()=>resolve(r.result);r.onerror=()=>{dbPromise=null;reject(new Error('Font storage is unavailable in this browser.'))}});return dbPromise;}
+export async function putFont(version,font){const db=await openFonts();await new Promise((resolve,reject)=>{const tx=db.transaction('fonts','readwrite');tx.objectStore('fonts').put(font,version);tx.oncomplete=resolve;tx.onerror=()=>reject(new Error('Could not save the font on this device.'));tx.onabort=()=>reject(new Error('Font storage is full or unavailable.'));});}
+export async function getFont(version){const db=await openFonts();return new Promise((resolve,reject)=>{const r=db.transaction('fonts').objectStore('fonts').get(version);r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(new Error('Could not read the saved font.'));});}
+export function toBase64(buffer){const bytes=new Uint8Array(buffer);let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(binary);}
+export function fromBase64(value){if(typeof value!=='string'||value.length>2800000)throw new Error('Invalid font in backup.');const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));if(bytes.byteLength>2097152)throw new Error('Font exceeds 2 MB.');return bytes.buffer;}
