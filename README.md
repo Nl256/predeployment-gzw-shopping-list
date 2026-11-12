@@ -1,6 +1,14 @@
-# Pre-Deployment GZW Shopping List
+# Pre-Deployment OBS Outputs
 
-Manual shopping-list controls and a transparent OBS/Streamlabs overlay. Everyone uses the same GitHub Pages address, with a separate save in each browser profile. No account is required.
+Manual lists and transparent OBS/Streamlabs overlays, organized in tabs. Everyone uses the same GitHub Pages address, with separate saves in each browser profile. No account is required.
+
+## Multiple outputs
+
+Use **+ New tab** to create outputs such as **Shirts**, **Twitch drops**, or another deployment list. Each tab has its own list, title, colors, opacity, custom font and OBS connection. Add each connected tab's URL as a separate OBS Browser Source. They can all display simultaneously; selecting a different editor tab never changes another source's contents.
+
+Existing saves automatically appear in the **Pre-deployment** tab, preserving the original OBS URL. New tabs start empty and do not connect online until you choose **Connect OBS**. Rename changes the tab label; edit **Overlay title** to change the on-stream heading. **Archive tab** hides a tab without removing its save or revoking its OBS link; restore it using the archived-tab selector. Up to 20 tabs, including archived tabs, can be saved. The backend allows up to 10 new OBS connections from one originating address per hour.
+
+**Export this tab** includes only the selected tab's list, appearance and font. Export each tab separately. **Import into this tab** replaces only that tab's contents and keeps its existing OBS connection; Undo can restore the previous contents. To transfer another output, create a new tab first, then import its backup. Legacy single-list backups remain supported.
 
 ## Use
 
@@ -8,11 +16,11 @@ Open https://nl256.github.io/predeployment-gzw-shopping-list/. Add names, quanti
 
 Set independent accent/border, background, title, item text, notes, quantity, subtitle and footer colors using swatches or hex values. Import a TTF, OTF, WOFF or WOFF2 font (maximum 2 MB).
 
-**Connect OBS** is optional. It creates a private online copy for this browser and uploads its current list, appearance and font. Click **Copy OBS URL**, add a Browser Source in OBS/Streamlabs, leave Local file unchecked, paste the URL and set **600 × 1080**. The overlay checks for changes every four seconds. Long lists rotate pages every ten seconds, and the panel scales to fit the source. OBS needs internet access. Keep the editor open until pending changes finish syncing; OBS can then display the last synced copy while the editor is closed.
+**Connect OBS** is optional for each tab. It creates a private online copy for that tab and uploads its list, appearance and font. Click **Copy OBS URL**, add a Browser Source in OBS/Streamlabs, leave Local file unchecked, paste the URL and set **600 × 1080**. Repeat for each output. The overlay checks for changes every four seconds. Long lists rotate pages every ten seconds, and the panel scales to fit the source. OBS needs internet access. Keep the editor open until pending changes finish syncing; background tabs also retry pending updates. OBS can then display each last synced copy while the editor is closed.
 
 The regular website address is safe to share. Keep your personal OBS URL private: it gives read-only access to your list and font. Disconnect OBS revokes that URL and removes its online copy while retaining your local save. Network failures never replace the local list; pending updates retry while the editor is open.
 
-Use **Export backup** before clearing browser data, using private browsing, or changing browsers/devices. Backups include the complete list, colors and custom font, without OBS access keys. **Import backup** restores them into the current browser. People sharing one browser profile share one save; separate devices and browser profiles have separate saves. The online OBS copy is not an account or a recovery service. If local browser data is cleared, reconnecting creates a new overlay URL.
+Use **Export this tab** for each output before clearing browser data, using private browsing, or changing browsers/devices. Backups include the complete list, colors and custom font, without OBS access keys. People sharing one browser profile share its tabs; separate devices and browser profiles have separate saves. The online OBS copy is not an account or a recovery service. If local browser data is cleared, reconnecting creates new overlay URLs.
 
 Old private control links offer **Copy old list into this browser**. This copies the legacy list and font once, without altering the old shared list. Future edits use the local save. Create a new personal OBS connection after copying. Existing legacy overlay URLs continue to display the old list.
 

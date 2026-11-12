@@ -1,4 +1,4 @@
-const CACHE='predeployment-local-v3';
+const CACHE='predeployment-local-v5-tabs';
 const files=['./','./index.html','./overlay.html','./app.js','./shared.js','./storage.js','./obs-sync.js','./overlay.js','./styles.css','./logo.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(files)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('predeployment-local-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
