@@ -133,7 +133,7 @@ async function init(){
   renderTabs();syncPending();
  }catch(e){status('Could not read local changes',true)}});
  window.addEventListener('online',syncPending);window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
- if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+ if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(registration=>registration.update()).catch(()=>{});
 }
 function currentTime(){return Date.now()+(readLocal(activeTab)?.clockOffset||0);}
 function mutateType(fn,redraw=true){if(dirty){notify('Export a backup before making more changes.');return;}snapshot();fn(state);changed();if(redraw)renderSettings();}
