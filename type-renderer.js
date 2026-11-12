@@ -1,17 +1,22 @@
 import {node} from './shared.js';
 import {imageBlob} from './image-assets.js';
 import {spinProgress} from './type-model.js';
+import {dropGeometry} from './drops-layout.js';
 const NS='http://www.w3.org/2000/svg';
 const svg=(tag,attrs={})=>{const e=document.createElementNS(NS,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e;};
 export function createTypeRenderer(root,{key='',now=()=>Date.now(),fit=()=>{}}={}){
- let state,signature='',cards=[],rotor,result,raf;const images=new Map(),reduced=matchMedia('(prefers-reduced-motion: reduce)');
+ let state,signature='',cards=[],rotor,result,raf,geometry=null,lastDropStep=-1;const images=new Map(),reduced=matchMedia('(prefers-reduced-motion: reduce)');
  function imageURL(id){if(!images.has(id)){const entry={url:null};entry.promise=imageBlob(id,key).then(blob=>{entry.url=URL.createObjectURL(blob);return entry.url;}).catch(e=>{images.delete(id);signature='';throw e;});images.set(id,entry);}return images.get(id).promise;}
- function set(next){state=next;const roster=state.wheelSpin?.entries||state.wheelEntries;const sig=JSON.stringify([state.type,state.type==='drops'?state.drops:roster,state.wheelSpin?.id,state.fontSize,state.logoSize]);if(sig===signature)return;signature=sig;root.replaceChildren();cards=[];rotor=null;result=null;
+ function set(next){state=next;const roster=state.wheelSpin?.entries||state.wheelEntries;const sig=JSON.stringify([state.type,state.type==='drops'?state.drops:roster,state.wheelSpin?.id,state.fontSize,state.logoSize,state.dropLayout,state.title,state.subtitle]);if(sig===signature)return;signature=sig;root.replaceChildren();root.style.width='';root.style.height='';cards=[];rotor=null;result=null;geometry=null;lastDropStep=-1;
   const used=new Set(state.type==='drops'?state.drops.map(d=>d.imageId):[]);for(const [id,entry] of images)if(!used.has(id)){entry.promise.then(url=>URL.revokeObjectURL(url)).catch(()=>{});images.delete(id);}
   if(state.type==='drops'){
-   root.className='typed-content drops-orbit';if(!state.drops.length){const empty=node('div','typed-empty','Add reward images and item names in your controls.');root.append(empty);}
-   const count=state.drops.length,side=count<2?190:Math.min(174,Math.floor(368*Math.sin(Math.PI/count)/1.42)-8),picture=Math.max(28,side-40);
-   for(const item of state.drops){const card=node('figure','drop-card'),img=node('img'),caption=node('figcaption','',item.name);card.style.width=side+'px';img.width=picture;img.height=picture;img.alt=item.name;caption.title=item.name;caption.style.fontSize=Math.min(state.fontSize*.75,Math.max(9,side/8))+'px';card.append(img,caption);root.append(card);cards.push(card);imageURL(item.imageId).then(url=>{if(img.isConnected){img.src=url;fit();}}).catch(()=>{if(img.isConnected)img.alt='Image unavailable: '+item.name;});}
+   const custom=state.dropLayout!=='orbit';root.className='typed-content '+(custom?'drops-layout drops-'+state.dropLayout:'drops-orbit');
+   if(custom){geometry=dropGeometry(state.dropLayout,state.drops.length,state);root.style.width=geometry.width+'px';root.style.height=geometry.height+'px';root.dataset.panel=geometry.panel;
+    const brand=node('header','drops-brand'),logo=node('img'),text=node('div','drops-brand-text'),title=node('h1','',state.title||'TWITCH DROPS');logo.src='logo.png';logo.alt='Pre-Deployment';logo.width=geometry.logoSize;logo.height=geometry.logoSize;brand.dataset.direction=geometry.orientation;title.style.fontSize=geometry.titleSize+'px';text.append(title);if(state.subtitle){const sub=node('p','',state.subtitle);sub.style.fontSize=Math.max(12,geometry.titleSize*.65)+'px';text.append(sub);}brand.append(logo,text);place(brand,geometry.brand);root.append(brand);
+   }
+   if(!state.drops.length){const empty=node('div','typed-empty','Add reward images and item names in your controls.');if(geometry?.empty)place(empty,geometry.empty);root.append(empty);}
+   const count=state.drops.length,side=count<2?190:Math.min(174,Math.floor(368*Math.sin(Math.PI/count)/1.42)-8),picture=geometry?geometry.picture:Math.max(28,side-40);
+   for(const item of state.drops){const card=node('figure','drop-card'),img=node('img'),caption=node('figcaption','',item.name);if(!geometry)card.style.width=side+'px';img.width=picture;img.height=picture;img.alt=item.name;caption.title=item.name;caption.style.fontSize=(geometry?geometry.fontSize:Math.min(state.fontSize*.75,Math.max(9,side/8)))+'px';card.append(img,caption);root.append(card);cards.push(card);imageURL(item.imageId).then(url=>{if(img.isConnected){img.src=url;fit();}}).catch(()=>{if(img.isConnected)img.alt='Image unavailable: '+item.name;});}
   }else if(state.type==='wheel'){
    root.className='typed-content wheel-stage';const drawing=svg('svg',{viewBox:'0 0 520 520',role:'img','aria-label':'Spin wheel'});rotor=svg('g');const entries=roster||[],n=entries.length;
    if(!n)drawing.append(svg('circle',{cx:260,cy:260,r:238,fill:'#283023',stroke:'var(--accent)','stroke-width':2}));
@@ -22,10 +27,11 @@ export function createTypeRenderer(root,{key='',now=()=>Date.now(),fit=()=>{}}={
   }else root.className='typed-content';fit();tick();
  }
  function tick(){cancelAnimationFrame(raf);if(!state||state.type==='list')return;
-  if(state.type==='drops'&&cards.length){const n=cards.length,phase=state.rotateDrops&&!reduced.matches?now()/(state.rotateSeconds*1000)*2*Math.PI/n:0;cards.forEach((card,i)=>{const angle=i*2*Math.PI/n+phase-Math.PI/2;const radius=n===1?0:184;card.style.transform=`translate(-50%,-50%) translate(${radius*Math.cos(angle)}px,${radius*Math.sin(angle)}px)`;});}
+  if(state.type==='drops'&&cards.length){const n=cards.length,rotating=state.rotateDrops&&!reduced.matches;if(geometry){const step=rotating?Math.floor(now()/(state.rotateSeconds*1000))%n:0;if(step!==lastDropStep){cards.forEach((card,i)=>place(card,geometry.slots[(i+step)%n]));lastDropStep=step;}}else{const phase=rotating?now()/(state.rotateSeconds*1000)*2*Math.PI/n:0;cards.forEach((card,i)=>{const angle=i*2*Math.PI/n+phase-Math.PI/2;const radius=n===1?0:184;card.style.transform=`translate(-50%,-50%) translate(${radius*Math.cos(angle)}px,${radius*Math.sin(angle)}px)`;});}}
   if(state.type==='wheel'&&rotor){const spin=state.wheelSpin;let angle=0,message=state.wheelEntries.length?'Ready to spin':'Add names to get started';if(spin){const elapsed=now()-spin.startedAt,t=Math.min(1,Math.max(0,elapsed/spin.duration)),ease=spinProgress(t,spin.mode);angle=spin.from+(spin.to-spin.from)*(reduced.matches?(t===1?1:0):ease);message=elapsed<0?'Starting in '+Math.max(1,Math.ceil(-elapsed/1000))+'…':t<1?'Spinning…':spin.winnerName;result.classList.toggle('has-winner',t>=1);result.dataset.winner=t>=1?spin.winnerId:'';}else{result.classList.remove('has-winner');result.dataset.winner='';}rotor.setAttribute('transform',`rotate(${angle},260,260)`);if(result.textContent!==message)result.textContent=message;}
   raf=requestAnimationFrame(tick);
  }
  return {set};
 }
+function place(element,box){element.style.left=box.x+'px';element.style.top=box.y+'px';element.style.width=box.width+'px';element.style.height=box.height+'px';}
 function contrast(hex){const v=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));return v[0]*.299+v[1]*.587+v[2]*.114>145?'#12180e':'#ffffff';}

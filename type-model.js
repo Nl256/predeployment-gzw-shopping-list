@@ -1,4 +1,5 @@
 export const TYPES={list:'Shopping list',drops:'Twitch drops',wheel:'Spin wheel'};
+export const DROP_LAYOUTS={orbit:'Circular orbit',strip:'Bottom strip',grid:'Reward grid',rail:'Side rail',corner:'Corner frame'};
 export const PALETTE=['#b9bd76','#547e80','#a86c58','#7077ab','#639273','#b28a4d'];
 export const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const limit=(v,min,max,fallback)=>Number.isFinite(Number(v))?Math.min(max,Math.max(min,Number(v))):fallback;
@@ -18,7 +19,7 @@ export function normalizeTypes(raw){
  const drops=(Array.isArray(raw.drops)?raw.drops:[]).slice(0,12).filter(d=>d&&UUID.test(d.imageId)).map(d=>({id:UUID.test(d.id)?d.id:crypto.randomUUID(),imageId:d.imageId,name:String(d.name||'Reward').slice(0,80)}));
  const wheelEntries=entries(raw.wheelEntries);let wheelSpin=null;const p=raw.wheelSpin;
  if(p&&UUID.test(p.id)&&Number.isFinite(p.startedAt)&&p.startedAt>0){const roster=entries(p.entries),winner=roster.find(e=>e.id===p.winnerId);if(winner){const from=limit(p.from,0,360000000,0);wheelSpin={id:p.id,mode:spinMode(p.mode),startedAt:p.startedAt,duration:limit(p.duration,6000,15000,8000),from,to:spinRotation(roster.indexOf(winner),roster.length,from),winnerId:winner.id,winnerName:winner.name,entries:roster,removeWinner:p.removeWinner===true,settled:p.settled===true};}}
- return {type,drops,rotateSeconds:limit(raw.rotateSeconds,2,30,5),rotateDrops:raw.rotateDrops!==false,wheelEntries,removeWinner:raw.removeWinner===true,spinSeconds:limit(raw.spinSeconds,6,15,8),wheelSpin};
+ return {type,drops,dropLayout:typeof raw.dropLayout==='string'&&Object.hasOwn(DROP_LAYOUTS,raw.dropLayout)?raw.dropLayout:'orbit',rotateSeconds:limit(raw.rotateSeconds,2,30,5),rotateDrops:raw.rotateDrops!==false,wheelEntries,removeWinner:raw.removeWinner===true,spinSeconds:limit(raw.spinSeconds,6,15,8),wheelSpin};
 }
 export function randomIndex(count){if(!Number.isInteger(count)||count<1)throw new Error('Add at least one name.');const bound=Math.floor(4294967296/count)*count;let value;do{value=crypto.getRandomValues(new Uint32Array(1))[0];}while(value>=bound);return value%count;}
 export function spinActive(state,now=Date.now()){return !!state.wheelSpin&&now<state.wheelSpin.startedAt+state.wheelSpin.duration;}
