@@ -1,36 +1,41 @@
 # Pre-Deployment OBS Outputs
 
-Manual lists and transparent OBS/Streamlabs overlays, organized in tabs. Everyone uses the same GitHub Pages address, with separate saves in each browser profile. No account is required.
+Shopping lists, Twitch drops and spin wheels for OBS/Streamlabs. Everyone uses [the same website](https://nl256.github.io/predeployment-gzw-shopping-list/), with separate local saves in each browser profile. No account is required.
 
-## Multiple outputs
+## Create an output
 
-Use **+ New tab** to create outputs such as **Shirts**, **Twitch drops**, or another deployment list. Each tab has its own list, title, colors, opacity, custom font and OBS connection. Add each connected tab's URL as a separate OBS Browser Source. They can all display simultaneously; selecting a different editor tab never changes another source's contents.
+Choose **+ New tab**, give it a name and select its overlay type. Each tab has its own content, colors, custom font and optional OBS connection. Existing saves and OBS URLs are preserved. Use **Output type** to change an older tab into a drops overlay or wheel; renaming a tab only changes its label.
 
-Existing saves automatically appear in the **Pre-deployment** tab, preserving the original OBS URL. New tabs start empty and do not connect online until you choose **Connect OBS**. Rename changes the tab label; edit **Overlay title** to change the on-stream heading. **Archive tab** hides a tab without removing its save or revoking its OBS link; restore it using the archived-tab selector. Up to 20 tabs, including archived tabs, can be saved. The backend allows up to 10 new OBS connections from one originating address per hour.
+- **Shopping list:** manually enter items, quantities and notes, update collected counts, check off items and reorder them. Long lists rotate pages every ten seconds.
+- **Twitch drops:** upload up to 12 PNG, JPG or WebP images (maximum 10 MB per source file) and enter an item name for each. Every image stays visible and upright as the images rotate through positions, with names underneath moving alongside them. The PD logo and editable Twitch drops text line remain fixed. Adjust the seconds per position or turn rotation off. Images are resized to at most 512 pixels and compressed for local storage and OBS sync.
+- **Spin wheel:** add 2–40 names, one per line; edit each name and slice color. The PD logo stays in the center. **Spin wheel** starts the same animation and winner in the preview and connected OBS output. Set a 6–15 second duration. **Remove winner after spinning** removes the winning entry from the next spin; the finished wheel remains visible until the next spin, an entry edit or **Clear winner display**. Every entry has an equal chance. Names, colors and type are locked during a spin. With reduced-motion preferences, drops stay still and the wheel reveals its result when the spin ends.
 
-**Export this tab** includes only the selected tab's list, appearance and font. Export each tab separately. **Import into this tab** replaces only that tab's contents and keeps its existing OBS connection; Undo can restore the previous contents. To transfer another output, create a new tab first, then import its backup. Legacy single-list backups remain supported.
+Shirt overlays are not included yet.
 
-## Use
+## Appearance and OBS
 
-Open https://nl256.github.io/predeployment-gzw-shopping-list/. Add names, quantities and optional notes. Use + / - to update collected counts, check an item off, reorder it or remove it. Lists and appearance changes save immediately in localStorage; imported fonts are saved locally in IndexedDB. The editor can reopen offline after its first successful load.
+Adjust the title, subtitle, opacity, logo size, text size and relevant colors independently for each output. Import TTF, OTF, WOFF or WOFF2 fonts up to 2 MB. Content and settings save in localStorage; imported images and fonts save in IndexedDB. The editor can reopen offline after its first successful load.
 
-Set independent accent/border, background, title, item text, notes, quantity, subtitle and footer colors using swatches or hex values. Import a TTF, OTF, WOFF or WOFF2 font (maximum 2 MB).
+Choose **Connect OBS** for each tab you want on stream, then **Copy OBS URL**. Add a separate Browser Source in OBS/Streamlabs, leave **Local file** unchecked, paste its URL and set **600 × 1080**. Every connected output can appear simultaneously. Selecting another editor tab does not change the other sources.
 
-**Connect OBS** is optional for each tab. It creates a private online copy for that tab and uploads its list, appearance and font. Click **Copy OBS URL**, add a Browser Source in OBS/Streamlabs, leave Local file unchecked, paste the URL and set **600 × 1080**. Repeat for each output. The overlay checks for changes every four seconds. Long lists rotate pages every ten seconds, and the panel scales to fit the source. OBS needs internet access. Keep the editor open until pending changes finish syncing; background tabs also retry pending updates. OBS can then display each last synced copy while the editor is closed.
+OBS polls ordinary output changes every four seconds and wheel events every second. A connected spin is selected once by the backend and scheduled briefly ahead so all viewers share the result. Keep the editor open while making changes and spinning; wait until it says OBS is connected and up to date. Pending changes retry after connection failures. OBS can continue displaying the last synced copy while the editor is closed. OBS needs internet access.
 
-The regular website address is safe to share. Keep your personal OBS URL private: it gives read-only access to your list and font. Disconnect OBS revokes that URL and removes its online copy while retaining your local save. Network failures never replace the local list; pending updates retry while the editor is open.
+The regular website address is safe to share. A personal OBS URL gives read-only access to that output, including its images and font; keep it private. **Disconnect OBS** revokes that URL and removes its online copy while keeping the local save. Each new tab starts locally without an online connection.
 
-Use **Export this tab** for each output before clearing browser data, using private browsing, or changing browsers/devices. Backups include the complete list, colors and custom font, without OBS access keys. People sharing one browser profile share its tabs; separate devices and browser profiles have separate saves. The online OBS copy is not an account or a recovery service. If local browser data is cleared, reconnecting creates new overlay URLs.
+## Backups and tabs
 
-Old private control links offer **Copy old list into this browser**. This copies the legacy list and font once, without altering the old shared list. Future edits use the local save. Create a new personal OBS connection after copying. Existing legacy overlay URLs continue to display the old list.
+**Export this tab** includes the selected output's content, images, appearance and custom font, without OBS access keys or a replayable spin event. Export each tab separately before clearing browser data or changing browsers/devices. To transfer an output, create a new tab and use **Import into this tab**. Import replaces only the selected tab's contents and preserves its existing OBS connection; Undo can restore the previous contents. Legacy list backups remain supported.
+
+People sharing one browser profile share its tabs; separate browser profiles/devices have separate saves. The online OBS copy is not an account or recovery service. Clearing local browser data requires reconnecting with new URLs. **Archive tab** hides a tab without erasing its save or revoking its OBS link; use the archived-tab selector to restore it. Up to 20 tabs, including archived tabs, can be saved. The backend allows up to 10 new connections per originating address per hour.
+
+Old private control links offer **Copy old list into this browser**. This copies the legacy list and font once without changing the old shared list. Future edits use the local save. Create a personal OBS connection after copying. Legacy overlay URLs continue displaying the old list.
 
 ## Hosting
 
-Publish the repository root from `main` using GitHub Pages. This is a buildless site. The endpoint is configured in `shared.js`; the backend source lives in `backend.ts`. Apply `schema.sql`, then `local-overlay-migration.sql`, and deploy the Edge Function as `shopping-list` with JWT verification disabled: it authenticates each request with its own read/edit capability key. The Edge Function needs the service-role key in its server environment; no admin key belongs in frontend code.
+Publish the repository root from `main` using GitHub Pages. This is a buildless site. The endpoint is configured in `shared.js`. Apply `schema.sql`, `local-overlay-migration.sql`, then `overlay-types-migration.sql`. Deploy `backend.ts` as the `shopping-list` Edge Function entry point, with `type-model.js` alongside it and JWT verification disabled: the function authenticates each request using its own read/edit capability key. The service-role key belongs only in the function's server environment.
 
-Connecting OBS generates separate random 256-bit read/edit keys in the browser. Only hashes are stored in the database. Edit keys stay in the local browser save; OBS receives only the read key in the URL fragment. The database denies direct anonymous access. The creation RPC is executable only by the service role and applies basic project and per-originating-address quotas. Backups and public source must never contain access keys or user font uploads.
+Connections generate random 256-bit read/edit keys in the browser. Only their hashes are stored in the database. Edit keys remain in the local save; OBS receives the read key in the URL fragment. The database denies direct anonymous access. Service-role-only creation quotas limit connection creation. Reward images and fonts are served only through an authorized output key. Backups and public repository files must never contain access keys or uploaded user assets.
 
-The service worker caches the app shell only, not backend responses. Increment the cache version in `sw.js` whenever publishing changed frontend assets. The local save envelope is versioned separately and remains intact during app updates.
+The service worker caches only the app shell, never backend responses. Increment its cache version in `sw.js` when publishing changed frontend assets. Local saves persist through app updates.
 
-Logo supplied by the project owner. Imported fonts remain on the user's device, with an online copy only when OBS is connected; they are never committed to the public repository.
-
+Logo supplied by the project owner. Uploaded images and fonts remain on the user's device, with an online copy only when that tab is connected to OBS; they are never committed to the public repository.

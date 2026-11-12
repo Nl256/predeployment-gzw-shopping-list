@@ -1,7 +1,8 @@
+import {normalizeTypes,createSpin,UUID} from './type-model.js';
 const base=Deno.env.get('SUPABASE_URL')!;
 const admin=JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')||'{}').default||Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'content-type,x-list-key,x-font-extension,x-font-version','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Cache-Control':'no-store'};
-function json(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json'}})}
+const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'content-type,x-list-key,x-font-extension,x-font-version','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Expose-Headers':'X-Server-Time','Cache-Control':'no-store'};
+function json(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json','X-Server-Time':String(Date.now())}})}
 async function db(path:string,options:RequestInit={}){const r=await fetch(base+'/rest/v1/'+path,{...options,headers:{apikey:admin,Authorization:'Bearer '+admin,'Content-Type':'application/json',Prefer:'return=representation',...(options.headers||{})}});if(!r.ok)throw new Error('Storage unavailable');return r.json()}
 const clip=(v:unknown,n:number)=>String(v??'').slice(0,n);
 const number=(v:unknown,a:number,b:number)=>Math.round(Math.min(b,Math.max(a,Number(v)||a)));
@@ -20,9 +21,15 @@ Deno.serve(async(req:Request)=>{
    const result=await db('rpc/create_shopping_overlay',{method:'POST',body:JSON.stringify({p_read_hash:await digest(viewKey),p_edit_hash:hash,p_creator_hash:await digest(admin+':'+ip)})});
    return result.error?json(result,429):json(result);
   }
-  const rows=await db(`shopping_lists?or=(read_hash.eq.${hash},edit_hash.eq.${hash})&select=id,edit_hash,state,font_version&limit=1`);
+  const rows=await db(`shopping_lists?or=(read_hash.eq.${hash},edit_hash.eq.${hash})&select=id,edit_hash,state,font_version,updated_at&limit=1`);
   const row=rows[0];if(!row)return req.method==='POST'&&action==='disconnect'?json({ok:true}):json({error:'This link is not valid.'},403);
   if(req.method==='GET'&&action==='state')return json(row.state);
+  if(req.method==='GET'&&action==='image'){
+   const id=new URL(req.url).searchParams.get('image')||'';if(!UUID.test(id))return json({error:'Invalid image.'},400);
+   const result=await db(`shopping_lists?id=eq.${row.id}&select=image_assets`),asset=result[0].image_assets?.[id];
+   if(!asset)return json({error:'Image unavailable.'},404);
+   return new Response(Uint8Array.from(atob(asset.data),c=>c.charCodeAt(0)),{headers:{...cors,'Content-Type':asset.type,'X-Content-Type-Options':'nosniff'}});
+  }
   if(req.method==='GET'&&action==='font'){
    const fonts=await db(`shopping_lists?id=eq.${row.id}&select=font_data,font_type`);const font=fonts[0];
    if(!font.font_data)return json({error:'No custom font.'},404);
@@ -32,6 +39,23 @@ Deno.serve(async(req:Request)=>{
   if(req.method!=='POST')return json({error:'Unsupported request'},405);
   if(row.edit_hash!==hash)return json({error:'This is a read-only OBS link.'},403);
   if(action==='disconnect'){await db(`shopping_lists?id=eq.${row.id}`,{method:'DELETE'});return json({ok:true});}
+  if(action==='images'){
+   const raw=await req.text();if(raw.length>2700000)return json({error:'Reward images are too large.'},413);
+   const input=JSON.parse(raw).assets;if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length>12)return json({error:'Maximum 12 reward images.'},400);
+   const assets:Record<string,unknown>={};for(const [id,value] of Object.entries(input)){
+    const asset=value as {type:string,data:string};if(!UUID.test(id)||!asset||!['image/webp','image/png','image/jpeg'].includes(asset.type)||typeof asset.data!=='string'||asset.data.length>218456||!/^[A-Za-z0-9+/]*={0,2}$/.test(asset.data))return json({error:'Invalid reward image.'},400);
+    const bytes=Uint8Array.from(atob(asset.data),c=>c.charCodeAt(0));const magic=Array.from(bytes.slice(0,12)).map(v=>v.toString(16).padStart(2,'0')).join('');
+    const valid=asset.type==='image/webp'?magic.startsWith('52494646')&&magic.slice(16,24)==='57454250':asset.type==='image/png'?magic.startsWith('89504e470d0a1a0a'):magic.startsWith('ffd8ff');
+    if(!valid||bytes.length>163840||bytes.length<12)return json({error:'Invalid image file.'},400);assets[id]={type:asset.type,data:asset.data};
+   }
+   await db(`shopping_lists?id=eq.${row.id}`,{method:'PATCH',body:JSON.stringify({image_assets:assets})});return json({ok:true});
+  }
+  if(action==='spin'){
+   let state;try{state=createSpin({...row.state,...normalizeTypes(row.state)},Date.now());}catch(e){return json({error:e instanceof Error?e.message:'Could not spin.'},409);}
+   const updated=await db(`shopping_lists?id=eq.${row.id}&updated_at=eq.${encodeURIComponent(row.updated_at)}`,{method:'PATCH',body:JSON.stringify({state,updated_at:new Date().toISOString()})});
+   if(!updated.length)return json({error:'This output changed in another window. Try spinning again.'},409);
+   return json({spin:state.wheelSpin,serverTime:Date.now()});
+  }
   if(action==='state'){
    const raw=await req.text();if(raw.length>180000)return json({error:'List is too large.'},413);
    const s=JSON.parse(raw);if(!Array.isArray(s.items)||s.items.length>200)return json({error:'Maximum 200 items.'},400);
@@ -41,6 +65,9 @@ Deno.serve(async(req:Request)=>{
     const candidate=s[name]??row.state[name];
     (state as Record<string,unknown>)[name]=/^#[0-9a-f]{6}$/i.test(candidate)?candidate.toLowerCase():fallback;
    }
+   Object.assign(state,normalizeTypes({...row.state,...s}));
+   const currentSpin=row.state.wheelSpin;
+   if(currentSpin&&Date.now()<currentSpin.startedAt+currentSpin.duration&&s.wheelSpin?.id!==currentSpin.id)(state as Record<string,unknown>).wheelSpin=currentSpin;
    await db(`shopping_lists?id=eq.${row.id}`,{method:'PATCH',body:JSON.stringify({state,updated_at:new Date().toISOString()})});return json({ok:true});
   }
   if(action==='font'){

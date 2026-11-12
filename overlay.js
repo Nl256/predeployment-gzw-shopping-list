@@ -1,11 +1,14 @@
+import {createTypeRenderer} from './type-renderer.js';
 import {normalize,request,node,loadFont} from './shared.js';
 import {DEFAULT_TAB,localKey,readLocal} from './storage.js';
 const $=id=>document.getElementById(id),params=new URLSearchParams(location.hash.slice(1));
 const key=params.get('view')||'',isPreview=new URLSearchParams(location.search).has('preview'),isLocal=isPreview||new URLSearchParams(location.search).has('local');
 const requestedTab=new URLSearchParams(location.search).get('tab'),localTab=requestedTab===DEFAULT_TAB||/^[a-f0-9-]{36}$/.test(requestedTab||'')?requestedTab:DEFAULT_TAB;
+let clockOffset=0;const typed=createTypeRenderer($('typedContent'),{key:isLocal?'':key,now:()=>Date.now()+clockOffset,fit});
 let state=normalize(),page=0,last='',loadedVersion='',fontGeneration=0;
 function fit(){const card=$('overlayCard');card.style.width='576px';card.style.transform='none';const scale=Math.min((innerWidth-24)/576,(innerHeight-24)/card.offsetHeight,1);card.style.transform=`scale(${Math.max(.1,scale)})`}
 function render(){
+ document.body.dataset.type=state.type;$('overlayItems').hidden=state.type!=='list';$('typedContent').hidden=state.type==='list';document.querySelector('.overlay-footer').hidden=state.type!=='list';document.querySelector('.progress-track').hidden=state.type!=='list';typed.set(state);
  document.documentElement.style.setProperty('--accent',state.accent);
  for(const [css,key] of Object.entries({'--title-color':'titleColor','--item-color':'textColor','--note-color':'noteColor','--quantity-color':'quantityColor','--subtitle-color':'subtitleColor','--footer-color':'footerColor'}))document.documentElement.style.setProperty(css,state[key]);
  const rgb=[1,3,5].map(i=>parseInt(state.backgroundColor.slice(i,i+2),16));
@@ -26,8 +29,8 @@ function render(){
  if(loadedVersion!==state.fontVersion){loadedVersion=state.fontVersion;const generation=++fontGeneration;document.body.style.setProperty('--overlay-font','var(--display)');if(state.fontVersion)loadFont(state.fontVersion,isLocal?null:key).then(()=>{if(generation===fontGeneration){document.body.style.setProperty('--overlay-font',"'ImportedOverlay', sans-serif");fit()}}).catch(()=>{if(generation===fontGeneration)loadedVersion=''})}
 }
 function update(raw){const next=JSON.stringify(raw);if(next===last)return;last=next;state=normalize(raw);render()}
-async function poll(){try{update(await(await request('state',key)).json());document.querySelector('.offline')?.remove()}catch{if(!isPreview&&!document.querySelector('.offline'))document.body.append(node('div','offline','SYNC OFFLINE · reconnecting'))}finally{if(!isPreview)setTimeout(poll,4000)}}
+async function poll(){const sent=Date.now();try{const response=await request('state',key);const server=Number(response.headers.get('X-Server-Time'));if(server)clockOffset=server-(sent+Date.now())/2;update(await response.json());document.querySelector('.offline')?.remove()}catch{if(!isPreview&&!document.querySelector('.offline'))document.body.append(node('div','offline','SYNC OFFLINE · reconnecting'))}finally{if(!isPreview)setTimeout(poll,state.type==='wheel'?1000:4000)}}
 window.addEventListener('resize',fit);$('overlayLogo').addEventListener('load',fit);
-if(isPreview){window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===parent&&e.data?.type==='preview-state')update(e.data.state)});parent.postMessage({type:'preview-ready'},location.origin);}
-if(isLocal){try{update(readLocal(localTab)?.state||{});}catch{render();}window.addEventListener('storage',e=>{if(!isPreview&&e.key===localKey(localTab))try{update(readLocal(localTab)?.state||{});}catch{}});setInterval(()=>{page++;render()},10000);}
+if(isPreview){window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===parent&&e.data?.type==='preview-state'){clockOffset=Number(e.data.clockOffset)||0;update(e.data.state);}});parent.postMessage({type:'preview-ready'},location.origin);}
+if(isLocal){try{const doc=readLocal(localTab);clockOffset=doc?.clockOffset||0;update(doc?.state||{});}catch{render();}window.addEventListener('storage',e=>{if(!isPreview&&e.key===localKey(localTab))try{const doc=readLocal(localTab);clockOffset=doc?.clockOffset||0;update(doc?.state||{});}catch{}});setInterval(()=>{page++;render()},10000);}
 else if(/^[a-f0-9]{64}$/.test(key)){render();poll();setInterval(()=>{page++;render()},10000)}else{document.body.classList.add('error-view');document.body.append(node('div','offline','Connect OBS from your shopping list and copy its URL.'))}

@@ -1,6 +1,9 @@
+import {TYPES,createSpin,finishSpin,spinActive} from './type-model.js';
+import {imageBundle,restoreImages} from './image-assets.js';
+import {initTypeEditor} from './type-editor.js';
 import {COLOR_DEFAULTS,DEFAULTS,normalize,request,node,clamp} from './shared.js';
 import {DEFAULT_TAB,TABS_KEY,localKey,readTabs,createTab,updateTab,readLocal,writeLocal,putFont,getFont,toBase64,fromBase64} from './storage.js';
-import {connection,startConnection,syncOBS,disconnectOBS} from './obs-sync.js';
+import {connection,startConnection,syncOBS,disconnectOBS,startWheelSpin} from './obs-sync.js';
 const $=id=>document.getElementById(id);
 const legacy=new URLSearchParams(location.hash.slice(1)),legacyKey=legacy.get('edit');
 let activeTab=DEFAULT_TAB,state=normalize(),previous=null,dirty=false,busy=false,toastTimer,revision='',tabFormMode='new';
@@ -9,9 +12,9 @@ function tabName(id=activeTab){return readTabs().find(t=>t.id===id)?.name||'Over
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5500)}
 function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error)}
 function snapshot(){previous=structuredClone(state);$('undo').disabled=false}
-function preview(){document.documentElement.style.setProperty('--accent',state.accent);$('preview').contentWindow?.postMessage({type:'preview-state',state},location.origin)}
+function preview(){document.documentElement.style.setProperty('--accent',state.accent);$('preview').contentWindow?.postMessage({type:'preview-state',state,clockOffset:readLocal(activeTab)?.clockOffset||0},location.origin)}
 function overlayURL(){const c=connection(activeTab);if(!c?.created)return '';const url=new URL('overlay.html',location.href);url.hash=new URLSearchParams({view:c.view});return url.href;}
-function updateConnectionUI(){const c=connection(activeTab);const url=overlayURL();$('copyUrl').textContent=url?'↗ Copy OBS URL':'↗ Connect OBS';$('connectOBS').textContent=c?'Sync now':'Connect my OBS overlay';$('disconnectOBS').hidden=!c;$('obsUrl').textContent=url||'Connect OBS to create your own private overlay URL.';$('obsConnection').textContent=c?(c.syncedRevision===revision?'Connected · your overlay is up to date.':'This tab is saved locally. Its OBS output is waiting for the latest changes.'):'Optional: sends only this tab’s list and font online for its own OBS overlay.';}
+function updateConnectionUI(){const c=connection(activeTab);const url=overlayURL();$('copyUrl').textContent=url?'↗ Copy OBS URL':'↗ Connect OBS';$('connectOBS').textContent=c?'Sync now':'Connect my OBS overlay';$('disconnectOBS').hidden=!c;$('obsUrl').textContent=url||'Connect OBS to create your own private overlay URL.';$('obsConnection').textContent=c?(c.syncedRevision===revision?'Connected · your overlay is up to date.':'This tab is saved locally. Its OBS output is waiting for the latest changes.'):'Optional: sends only this tab’s content, images and font online for its own OBS overlay.';}
 function changed(){
  preview();dirty=true;try{const doc=readLocal(activeTab)||{schema:2,connection:null};revision=crypto.randomUUID();writeLocal({...doc,state,revision},activeTab);dirty=false;status('Saved on this device');updateConnectionUI();renderTabs();queueSync();}catch(e){status('Local save failed · export a backup',true);notify(e.message||'Browser storage is unavailable. Export a backup before closing.');}
 }
@@ -27,7 +30,7 @@ function syncPending(){for(const t of readTabs()){const d=readLocal(t.id);if(d?.
 function renderTabs(){
  const tabs=readTabs(),list=$('overlayTabs'),focused=list.contains(document.activeElement)?document.activeElement.id:null;list.replaceChildren();
  for(const tab of tabs.filter(t=>!t.archived)){
-  const button=actionButton(tab.name,()=>switchTab(tab.id));button.id='tab-'+tab.id;button.className='overlay-tab';button.setAttribute('role','tab');button.setAttribute('aria-selected',String(tab.id===activeTab));button.setAttribute('aria-controls','tabEditor');button.tabIndex=tab.id===activeTab?0:-1;button.disabled=busy;
+  const button=actionButton(tab.name,()=>switchTab(tab.id));button.id='tab-'+tab.id;button.className='overlay-tab';button.title=TYPES[readLocal(tab.id)?.state.type||'list'];button.setAttribute('role','tab');button.setAttribute('aria-selected',String(tab.id===activeTab));button.setAttribute('aria-controls','tabEditor');button.tabIndex=tab.id===activeTab?0:-1;button.disabled=busy;
   const doc=readLocal(tab.id);if(doc?.connection){const badge=node('span','tab-indicator',doc.connection.syncedRevision===doc.revision?'●':'◌');badge.setAttribute('aria-label',doc.connection.syncedRevision===doc.revision?'OBS connected':'OBS changes pending');button.append(badge);}list.append(button);
  }
  $('activeTabName').textContent=tabName();$('tabEditor').setAttribute('aria-labelledby','tab-'+activeTab);
@@ -37,7 +40,7 @@ function renderTabs(){
  for(const id of ['newTab','renameTab','restoreTab'])$(id).disabled=busy;
  if(focused&&!busy)document.getElementById(focused)?.focus();
 }
-function showTabForm(mode){if(busy)return;tabFormMode=mode;$('tabNameForm').hidden=false;$('tabNameLabel').textContent=mode==='new'?'Name your new output':'Rename this tab';$('tabName').value=mode==='new'?'':tabName();$('saveTabName').textContent=mode==='new'?'Create tab':'Save name';$('tabName').focus();}
+function showTabForm(mode){if(busy)return;tabFormMode=mode;$('newTypeLabel').hidden=mode!=='new';$('tabNameForm').hidden=false;$('tabNameLabel').textContent=mode==='new'?'Name your new output':'Rename this tab';$('tabName').value=mode==='new'?'':tabName();$('saveTabName').textContent=mode==='new'?'Create tab':'Save name';$('tabName').focus();}
 function switchTab(id){
  if(busy){notify('Finish the current import or connection first.');return;}
  if(dirty){notify('Export a backup before switching: the current save could not be stored.');return;}
@@ -52,11 +55,11 @@ function switchTab(id){
 }
 async function tabOperation(fn){if(busy)return;busy=true;renderTabs();try{await fn();}catch(e){notify(e.message);}finally{busy=false;renderTabs();}}
 function download(value,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([value],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-async function importState(raw,font){
- const next=normalize(raw);if(!Array.isArray(raw?.items))throw new Error('Choose an exported shopping list.');
+async function importState(raw,font,assets){
+ const next=normalize(raw);if(!Array.isArray(raw?.items))throw new Error('Choose an exported overlay backup.');
  if(font){if(!['ttf','otf','woff','woff2'].includes(font.ext))throw new Error('Invalid font format in backup.');const bytes=fromBase64(font.data);await new FontFace('BackupValidation',bytes).load();next.fontVersion=crypto.randomUUID();next.fontName=String(font.name||next.fontName).slice(0,100);await putFont(next.fontVersion,{bytes,ext:font.ext,name:next.fontName});}
  else if(next.fontVersion&&!(await getFont(next.fontVersion))){next.fontVersion='';next.fontName=DEFAULTS.fontName;}
- snapshot();state=next;renderItems();renderSettings();changed();
+ await restoreImages(next,assets);next.wheelSpin=null;snapshot();state=next;renderItems();renderSettings();changed();
 }
 function actionButton(label,fn){const b=node('button','',label);b.type='button';b.addEventListener('click',fn);return b}
 function renderItems(){
@@ -80,7 +83,7 @@ function renderItems(){
   actions.append(up,down,del);side.append(stepper,actions);row.append(toggle,details,side);target.append(row);
  });
 }
-function renderSettings(){for(const k of ['title','subtitle','opacity','fontSize','logoSize','rows'])$(k).value=state[k];$('hideCompleted').checked=state.hideCompleted;$('fontName').textContent=state.fontName;renderColors();renderOutputs()}
+function renderSettings(){for(const k of ['title','subtitle','opacity','fontSize','logoSize','rows'])$(k).value=state[k];$('hideCompleted').checked=state.hideCompleted;$('fontName').textContent=state.fontName;renderColors();renderOutputs();typeUI.render()}
 function renderColors(){for(const k of Object.keys(COLOR_DEFAULTS)){$(k).value=state[k];$(k+'Hex').value=state[k];$(k+'Hex').setCustomValidity('')}}
 function renderOutputs(){for(const k of ['opacity','fontSize','logoSize'])$(k+'Value').textContent=state[k]+(k==='opacity'?'%':'px')}
 async function init(){
@@ -94,7 +97,7 @@ async function init(){
  switchTab(activeTab);syncPending();
  if(/^[a-f0-9]{64}$/.test(legacyKey||'')){$('legacyNotice').hidden=false;history.replaceState(null,'',location.pathname+location.search);}
  $('newTab').onclick=()=>showTabForm('new');$('renameTab').onclick=()=>showTabForm('rename');$('cancelTabName').onclick=()=>{$('tabNameForm').hidden=true};
- $('tabNameForm').onsubmit=e=>{e.preventDefault();if(busy||dirty){notify('Finish saving the current tab first.');return;}try{const name=$('tabName').value.trim();if(tabFormMode==='new'){const tab=createTab(name,normalize({title:name.toUpperCase(),subtitle:'PRE-DEPLOYMENT'}));switchTab(tab.id);}else{updateTab(activeTab,{name});renderTabs();$('tabNameForm').hidden=true;}notify('Tab saved on this device.');}catch(e){notify(e.message)}};
+ $('tabNameForm').onsubmit=e=>{e.preventDefault();if(busy||dirty){notify('Finish saving the current tab first.');return;}try{const name=$('tabName').value.trim();if(tabFormMode==='new'){const tab=createTab(name,normalize({type:$('newOutputType').value,title:$('newOutputType').value==='drops'?'TWITCH DROPS ENABLED':name.toUpperCase(),subtitle:$('newOutputType').value==='list'?'PRE-DEPLOYMENT':''}));switchTab(tab.id);}else{updateTab(activeTab,{name});renderTabs();$('tabNameForm').hidden=true;}notify('Tab saved on this device.');}catch(e){notify(e.message)}};
  $('archiveTab').onclick=()=>{if(busy||dirty)return;try{updateTab(activeTab,{archived:true});switchTab(readTabs().find(t=>!t.archived).id);notify('Tab archived. Restore it below at any time. Its OBS link stays active.');}catch(e){notify(e.message)}};
  $('restoreTab').onchange=()=>{const id=$('restoreTab').value;if(!id||busy||dirty)return;try{updateTab(id,{archived:false});switchTab(id);}catch(e){notify(e.message)}};
  $('overlayTabs').onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key)||busy)return;e.preventDefault();const tabs=readTabs().filter(t=>!t.archived),index=tabs.findIndex(t=>t.id===activeTab);const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;switchTab(tabs[next].id);document.getElementById('tab-'+activeTab)?.focus();};
@@ -106,7 +109,7 @@ async function init(){
   await importState(raw,font);$('legacyNotice').hidden=true;notify('Copied into this browser. Future edits are yours alone.');
  }catch(e){notify('Could not copy the old list: '+e.message)}finally{button.disabled=false}});
  $('addForm').addEventListener('submit',e=>{e.preventDefault();const name=$('itemName').value.trim();if(!name)return;if(state.items.length>=200){notify('Maximum 200 items. Remove an item first.');return}snapshot();state.items.push({id:crypto.randomUUID(),name,note:'',qty:Math.round(clamp($('itemQty').value,1,9999,1)),have:0});$('itemName').value='';$('itemQty').value=1;changed();renderItems();$('itemName').focus()});
- $('undo').onclick=()=>{if(!previous)return;const swap=state;state=previous;previous=swap;changed();renderItems();renderSettings()};
+ $('undo').onclick=()=>{if(spinActive(state,currentTime())){notify('Wait for this spin to finish.');return;}if(!previous)return;const swap=state;state=previous;previous=swap;changed();renderItems();renderSettings()};
  $('clearDone').onclick=()=>{snapshot();state.items=state.items.filter(i=>i.have<i.qty);changed();renderItems()};
  for(const k of ['title','subtitle','opacity','fontSize','logoSize','rows','hideCompleted'])$(k).addEventListener('input',()=>{snapshot();state[k]=k==='hideCompleted'?$(k).checked:['opacity','fontSize','logoSize','rows'].includes(k)?Number($(k).value):$(k).value;renderOutputs();changed()});
  for(const k of Object.keys(COLOR_DEFAULTS)){
@@ -121,8 +124,8 @@ async function init(){
  $('disconnectOBS').onclick=()=>tabOperation(async()=>{const id=activeTab;clearTimeout(syncTimers.get(id));$('disconnectOBS').disabled=true;try{await disconnectOBS(id);status('Saved on this device');updateConnectionUI();notify('This tab’s OBS output is disconnected. Its local list and font are kept.')}catch(e){notify('Reconnect to the internet to disconnect OBS. '+e.message);queueSync(10000,id)}finally{$('disconnectOBS').disabled=false}});
  $('fontFile').onchange=()=>tabOperation(async()=>{const file=$('fontFile').files[0];if(!file)return;const ext=file.name.split('.').pop().toLowerCase();if(!['ttf','otf','woff','woff2'].includes(ext)||file.size>2097152){notify('Choose a supported font under 2 MB.');$('fontFile').value='';return}$('fontFile').disabled=true;try{const bytes=await file.arrayBuffer();await new FontFace('FontValidation',bytes).load();const version=crypto.randomUUID();await putFont(version,{bytes,ext,name:file.name});snapshot();state.fontVersion=version;state.fontName=file.name;renderSettings();changed();notify('Font saved for this tab.')}catch(e){notify('Font import failed: '+e.message)}finally{$('fontFile').value='';$('fontFile').disabled=false}});
  $('resetFont').onclick=()=>{snapshot();state.fontVersion='';state.fontName=DEFAULTS.fontName;changed();renderSettings()};
- $('exportList').onclick=async()=>{try{const exported=structuredClone(state),name=tabName();const saved=exported.fontVersion?await getFont(exported.fontVersion):null;if(exported.fontVersion&&!saved)throw new Error('Re-import your font before exporting a complete backup.');const font=saved?{name:saved.name,ext:saved.ext,data:toBase64(saved.bytes)}:null;download(JSON.stringify({format:'predeployment-shopping-list',version:2,name,state:exported,font},null,2),'predeployment-'+name.replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'-backup.json');notify('Backup includes this tab’s list, appearance and font. Export other tabs separately.')}catch(e){notify(e.message)}};
- $('importList').onchange=()=>tabOperation(async()=>{const file=$('importList').files[0];if(!file)return;try{if(file.size>3200000)throw new Error('Backup is too large.');const raw=JSON.parse(await file.text());await importState(raw.state||raw,raw.font||null);notify('Backup restored into '+tabName()+'. Other tabs are unchanged.')}catch(e){notify(e.message)}finally{$('importList').value=''}});
+ $('exportList').onclick=async()=>{try{const exported=structuredClone(state),name=tabName();const saved=exported.fontVersion?await getFont(exported.fontVersion):null;if(exported.fontVersion&&!saved)throw new Error('Re-import your font before exporting a complete backup.');const font=saved?{name:saved.name,ext:saved.ext,data:toBase64(saved.bytes)}:null;download(JSON.stringify({format:'predeployment-shopping-list',version:3,name,state:{...exported,wheelSpin:null},font,images:await imageBundle(exported)},null,2),'predeployment-'+name.replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'-backup.json');notify('Backup includes this tab’s content, images, appearance and font. Export other tabs separately.')}catch(e){notify(e.message)}};
+ $('importList').onchange=()=>tabOperation(async()=>{const file=$('importList').files[0];if(!file)return;try{if(file.size>8000000)throw new Error('Backup is too large.');const raw=JSON.parse(await file.text());await importState(raw.state||raw,raw.font||null,raw.images);notify('Backup restored into '+tabName()+'. Other tabs are unchanged.')}catch(e){notify(e.message)}finally{$('importList').value=''}});
  window.addEventListener('storage',e=>{try{
   if(e.key===TABS_KEY){if(!readTabs().some(t=>t.id===activeTab&&!t.archived)&&!busy&&!dirty)switchTab(readTabs().find(t=>!t.archived).id);renderTabs();return;}
   if(!readTabs().some(t=>localKey(t.id)===e.key))return;
@@ -132,4 +135,16 @@ async function init(){
  window.addEventListener('online',syncPending);window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
  if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
+function currentTime(){return Date.now()+(readLocal(activeTab)?.clockOffset||0);}
+function mutateType(fn,redraw=true){if(dirty){notify('Export a backup before making more changes.');return;}snapshot();fn(state);changed();if(redraw)renderSettings();}
+async function spinSelected(){
+ if(spinActive(state,currentTime()))return;
+ await tabOperation(async()=>{const id=activeTab;document.getElementById('tabEditor').inert=true;try{
+  clearTimeout(syncTimers.get(id));if(connection(id)){await startWheelSpin(id);const doc=readLocal(id);state=normalize(doc.state);revision=doc.revision;status('Saved locally · OBS connected');}
+  else{state=createSpin(state,Date.now(),500);const doc=readLocal(id);doc.clockOffset=0;writeLocal(doc,id);changed();}
+  previous=null;$('undo').disabled=true;renderSettings();preview();updateConnectionUI();syncPending();
+ }finally{document.getElementById('tabEditor').inert=false;}});
+}
+const typeUI=initTypeEditor({getState:()=>state,mutate:mutateType,operation:tabOperation,notify,spin:spinSelected,now:currentTime});
+setInterval(()=>{try{for(const tab of readTabs()){const doc=readLocal(tab.id);if(!doc)continue;const next=finishSpin(doc.state,Date.now()+(doc.clockOffset||0));if(next===doc.state)continue;doc.state=next;doc.revision=crypto.randomUUID();writeLocal(doc,tab.id);if(tab.id===activeTab){state=normalize(next);revision=doc.revision;renderSettings();preview();updateConnectionUI();}queueSync(0,tab.id);}}catch{}},350);
 init().catch(e=>{status('Could not open local save',true);notify(e.message)});

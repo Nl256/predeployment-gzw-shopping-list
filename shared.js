@@ -1,10 +1,11 @@
+import {normalizeTypes} from './type-model.js';
 export const API = 'https://lreqntqzpsvjmjeaccwx.supabase.co/functions/v1/shopping-list';
 export const COLOR_DEFAULTS = {"accent":"#b9bd76","backgroundColor":"#0d120d","titleColor":"#f3f0e2","textColor":"#f3f0e2","noteColor":"#adb5a4","quantityColor":"#b9bd76","subtitleColor":"#b9bd76","footerColor":"#9aa68b"};
 export const DEFAULTS = {title:'SHOPPING LIST',subtitle:'GZW / NEXT DEPLOYMENT',...COLOR_DEFAULTS,opacity:90,fontSize:23,logoSize:148,rows:7,hideCompleted:false,fontVersion:'',fontName:'Default tactical',items:[]};
 export const clamp=(v,a,b,f=a)=>Number.isFinite(Number(v))?Math.min(b,Math.max(a,Number(v))):f;
 export const text=(v,max=100)=>String(v??'').slice(0,max);
 export function normalize(raw={}){
- const s={...DEFAULTS};
+ raw=raw&&typeof raw==='object'?raw:{};const s={...DEFAULTS,...normalizeTypes(raw)};
  for(const [key,max] of [['title',50],['subtitle',80],['fontName',100]]) if(typeof raw[key]==='string') s[key]=text(raw[key],max);
  for(const [k,fallback] of Object.entries(COLOR_DEFAULTS)) s[k]=/^#[0-9a-f]{6}$/i.test(raw[k])?raw[k].toLowerCase():((k==='quantityColor'||k==='subtitleColor')&&/^#[0-9a-f]{6}$/i.test(raw.accent)?raw.accent:fallback);
  for(const [key,a,b] of [['opacity',0,100],['fontSize',16,34],['logoSize',70,200],['rows',4,10]]) s[key]=clamp(raw[key]??s[key],a,b,s[key]);
@@ -23,3 +24,4 @@ export async function loadFont(version,key){
  let bytes;if(key){const r=await request('font',key);bytes=await r.arrayBuffer();}else{const {getFont}=await import('./storage.js');const saved=await getFont(version);if(!saved)throw new Error('Saved font not found.');bytes=saved.bytes;}
  const font=new FontFace('ImportedOverlay',bytes);await font.load();document.fonts.add(font);return font;
 }
+
