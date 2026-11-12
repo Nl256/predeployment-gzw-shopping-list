@@ -51,7 +51,9 @@ Deno.serve(async(req:Request)=>{
    await db(`shopping_lists?id=eq.${row.id}`,{method:'PATCH',body:JSON.stringify({image_assets:assets})});return json({ok:true});
   }
   if(action==='spin'){
-   let state;try{state=createSpin({...row.state,...normalizeTypes(row.state)},Date.now());}catch(e){return json({error:e instanceof Error?e.message:'Could not spin.'},409);}
+   const raw=await req.text();if(raw.length>1024)return json({error:'Invalid spin request.'},400);
+   let mode='normal';try{const input=raw?JSON.parse(raw):{};if(input?.mode!==undefined){if(!['normal','troll'].includes(input.mode))return json({error:'Choose a normal or troll spin.'},400);mode=input.mode;}}catch{return json({error:'Invalid spin request.'},400);}
+   let state;try{state=createSpin({...row.state,...normalizeTypes(row.state)},Date.now(),2500,mode);}catch(e){return json({error:e instanceof Error?e.message:'Could not spin.'},409);}
    const updated=await db(`shopping_lists?id=eq.${row.id}&updated_at=eq.${encodeURIComponent(row.updated_at)}`,{method:'PATCH',body:JSON.stringify({state,updated_at:new Date().toISOString()})});
    if(!updated.length)return json({error:'This output changed in another window. Try spinning again.'},409);
    return json({spin:state.wheelSpin,serverTime:Date.now()});

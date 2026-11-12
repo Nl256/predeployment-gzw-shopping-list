@@ -137,11 +137,11 @@ async function init(){
 }
 function currentTime(){return Date.now()+(readLocal(activeTab)?.clockOffset||0);}
 function mutateType(fn,redraw=true){if(dirty){notify('Export a backup before making more changes.');return;}snapshot();fn(state);changed();if(redraw)renderSettings();}
-async function spinSelected(){
+async function spinSelected(mode='normal'){
  if(spinActive(state,currentTime()))return;
  await tabOperation(async()=>{const id=activeTab;document.getElementById('tabEditor').inert=true;try{
-  clearTimeout(syncTimers.get(id));if(connection(id)){await startWheelSpin(id);const doc=readLocal(id);state=normalize(doc.state);revision=doc.revision;status('Saved locally · OBS connected');}
-  else{state=createSpin(state,Date.now(),500);const doc=readLocal(id);doc.clockOffset=0;writeLocal(doc,id);changed();}
+  clearTimeout(syncTimers.get(id));if(connection(id)){await startWheelSpin(id,mode);const doc=readLocal(id);state=normalize(doc.state);revision=doc.revision;status('Saved locally · OBS connected');}
+  else{state=createSpin(state,Date.now(),500,mode);const doc=readLocal(id);doc.clockOffset=0;writeLocal(doc,id);changed();}
   previous=null;$('undo').disabled=true;renderSettings();preview();updateConnectionUI();syncPending();
  }finally{document.getElementById('tabEditor').inert=false;}});
 }

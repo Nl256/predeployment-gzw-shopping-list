@@ -1,5 +1,6 @@
 import {node} from './shared.js';
 import {imageBlob} from './image-assets.js';
+import {spinProgress} from './type-model.js';
 const NS='http://www.w3.org/2000/svg';
 const svg=(tag,attrs={})=>{const e=document.createElementNS(NS,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e;};
 export function createTypeRenderer(root,{key='',now=()=>Date.now(),fit=()=>{}}={}){
@@ -22,7 +23,7 @@ export function createTypeRenderer(root,{key='',now=()=>Date.now(),fit=()=>{}}={
  }
  function tick(){cancelAnimationFrame(raf);if(!state||state.type==='list')return;
   if(state.type==='drops'&&cards.length){const n=cards.length,phase=state.rotateDrops&&!reduced.matches?now()/(state.rotateSeconds*1000)*2*Math.PI/n:0;cards.forEach((card,i)=>{const angle=i*2*Math.PI/n+phase-Math.PI/2;const radius=n===1?0:184;card.style.transform=`translate(-50%,-50%) translate(${radius*Math.cos(angle)}px,${radius*Math.sin(angle)}px)`;});}
-  if(state.type==='wheel'&&rotor){const spin=state.wheelSpin;let angle=0,message=state.wheelEntries.length?'Ready to spin':'Add names to get started';if(spin){const elapsed=now()-spin.startedAt,t=Math.min(1,Math.max(0,elapsed/spin.duration)),ease=1-Math.pow(1-t,4);angle=spin.from+(spin.to-spin.from)*(reduced.matches?(t===1?1:0):ease);message=elapsed<0?'Starting in '+Math.max(1,Math.ceil(-elapsed/1000))+'…':t<1?'Spinning…':spin.winnerName;result.classList.toggle('has-winner',t>=1);result.dataset.winner=t>=1?spin.winnerId:'';}else{result.classList.remove('has-winner');result.dataset.winner='';}rotor.setAttribute('transform',`rotate(${angle},260,260)`);if(result.textContent!==message)result.textContent=message;}
+  if(state.type==='wheel'&&rotor){const spin=state.wheelSpin;let angle=0,message=state.wheelEntries.length?'Ready to spin':'Add names to get started';if(spin){const elapsed=now()-spin.startedAt,t=Math.min(1,Math.max(0,elapsed/spin.duration)),ease=spinProgress(t,spin.mode);angle=spin.from+(spin.to-spin.from)*(reduced.matches?(t===1?1:0):ease);message=elapsed<0?'Starting in '+Math.max(1,Math.ceil(-elapsed/1000))+'…':t<1?'Spinning…':spin.winnerName;result.classList.toggle('has-winner',t>=1);result.dataset.winner=t>=1?spin.winnerId:'';}else{result.classList.remove('has-winner');result.dataset.winner='';}rotor.setAttribute('transform',`rotate(${angle},260,260)`);if(result.textContent!==message)result.textContent=message;}
   raf=requestAnimationFrame(tick);
  }
  return {set};

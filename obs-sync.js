@@ -14,11 +14,11 @@ async function performSync(id){
  const current=readLocal(id);if(current?.connection?.edit===c.edit){current.connection={...c,syncedRevision:saved.revision};writeLocal(current,id);}return true;
 }
 export function syncOBS(id=DEFAULT_TAB){if(running.has(id))return running.get(id);const task=withSyncLock(id,()=>performSync(id)).finally(()=>running.delete(id));running.set(id,task);return task;}
-export async function startWheelSpin(id){
+export async function startWheelSpin(id,mode='normal'){
  if(running.has(id))await running.get(id);
  return withSyncLock(id,async()=>{
   await performSync(id);const before=readLocal(id),c=connection(id);if(!c)throw new Error('Connect OBS first.');
-  const started=Date.now(),result=await(await request('spin',c.edit,{method:'POST'})).json(),received=Date.now();
+  const started=Date.now(),result=await(await request('spin',c.edit,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:mode==='troll'?'troll':'normal'})})).json(),received=Date.now();
   const doc=readLocal(id);if(doc?.connection?.edit!==c.edit)throw new Error('OBS connection changed.');
   const unchanged=doc.revision===before.revision;doc.state.wheelSpin=result.spin;doc.clockOffset=result.serverTime-(started+received)/2;doc.revision=crypto.randomUUID();if(unchanged)doc.connection.syncedRevision=doc.revision;writeLocal(doc,id);return doc;
  });

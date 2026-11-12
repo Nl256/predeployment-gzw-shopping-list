@@ -11,7 +11,8 @@ export function initTypeEditor({getState,mutate,operation,notify,spin,now}){
  $('wheelForm').onsubmit=e=>{e.preventDefault();if(spinActive(getState(),now()))return;const names=$('wheelNames').value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);if(getState().wheelEntries.length+names.length>40){notify('Maximum 40 names on a wheel.');return;}if(!names.length)return;mutate(s=>{for(const name of names)s.wheelEntries.push({id:crypto.randomUUID(),name:name.slice(0,60),color:PALETTE[s.wheelEntries.length%PALETTE.length]});s.wheelSpin=null;});$('wheelNames').value='';};
  $('removeWinner').onchange=()=>mutate(s=>s.removeWinner=$('removeWinner').checked);
  $('spinSeconds').onchange=()=>mutate(s=>s.spinSeconds=Number($('spinSeconds').value));
- $('spinWheel').onclick=()=>spin();
+ $('spinWheel').onclick=()=>spin('normal');
+ $('trollSpin').onclick=()=>spin('troll');
  $('clearSpinResult').onclick=()=>{if(!spinActive(getState(),now()))mutate(s=>s.wheelSpin=null);};
  function render(){if(rendering)return;rendering=true;try{const s=getState();$('outputType').value=s.type;$('dropsPanel').hidden=s.type!=='drops';$('wheelPanel').hidden=s.type!=='wheel';document.querySelector('.list-panel').hidden=s.type!=='list';$('outputKind').textContent=TYPES[s.type];
   for(const id of ['rows','hideCompleted'])$(id).closest('label').hidden=s.type!=='list';for(const id of ['noteColor','quantityColor','footerColor'])$(id).closest('.color-field').hidden=s.type!=='list';
@@ -22,7 +23,7 @@ export function initTypeEditor({getState,mutate,operation,notify,spin,now}){
   $('wheelEntries').replaceChildren();$('wheelCount').textContent=s.wheelEntries.length+' NAMES';
   s.wheelEntries.forEach(entry=>{const row=node('div','wheel-entry'),name=node('input'),color=node('input');name.value=entry.name;name.maxLength=60;name.setAttribute('aria-label','Wheel name '+entry.name);name.oninput=()=>mutate(state=>{state.wheelEntries.find(e=>e.id===entry.id).name=name.value.trim()||entry.name;state.wheelSpin=null;},false);color.type='color';color.value=entry.color;color.setAttribute('aria-label','Slice color for '+entry.name);color.oninput=()=>mutate(state=>{state.wheelEntries.find(e=>e.id===entry.id).color=color.value;state.wheelSpin=null;},false);row.append(color,name,button('Remove '+entry.name,()=>mutate(state=>{state.wheelEntries=state.wheelEntries.filter(e=>e.id!==entry.id);state.wheelSpin=null;})));$('wheelEntries').append(row);});tick();
  }finally{rendering=false;}}
- function tick(){const s=getState(),active=spinActive(s,now());$('outputType').disabled=active;for(const el of $('wheelPanel').querySelectorAll('input,textarea,select,button'))el.disabled=active;$('spinWheel').disabled=active||s.wheelEntries.length<2;$('clearSpinResult').disabled=active||!s.wheelSpin;
+ function tick(){const s=getState(),active=spinActive(s,now());$('outputType').disabled=active;for(const el of $('wheelPanel').querySelectorAll('input,textarea,select,button'))el.disabled=active;$('spinWheel').disabled=active||s.wheelEntries.length<2;$('trollSpin').disabled=active||s.wheelEntries.length<2;$('clearSpinResult').disabled=active||!s.wheelSpin;
   let text='Add at least two names, then spin.';if(s.wheelEntries.length>=2)text='Every name has an equal chance.';if(s.wheelSpin){const p=s.wheelSpin;const remaining=p.startedAt-now();text=active?(remaining>0?'Starting in '+Math.ceil(remaining/1000)+'…':'Spinning…'):'Winner: '+p.winnerName+(p.removeWinner?' · removed from the next spin':'');}$('wheelStatus').textContent=text;
  }
  setInterval(tick,250);return {render,tick};
