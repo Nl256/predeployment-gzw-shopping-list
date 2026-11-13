@@ -1,5 +1,5 @@
 export const TYPES={list:'Shopping list',drops:'Twitch drops',wheel:'Spin wheel'};
-export const DROP_LAYOUTS={orbit:'Circular orbit',strip:'Bottom strip',grid:'Reward grid',rail:'Side rail',corner:'Corner frame',card:'Twitch card'};
+export const DROP_LAYOUTS={orbit:'Circular orbit',strip:'Bottom strip',grid:'Reward grid',rail:'Side rail',corner:'Corner frame',card:'PD supply card'};
 export const PALETTE=['#b9bd76','#547e80','#a86c58','#7077ab','#639273','#b28a4d'];
 export const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const limit=(v,min,max,fallback)=>Number.isFinite(Number(v))?Math.min(max,Math.max(min,Number(v))):fallback;

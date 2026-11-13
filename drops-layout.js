@@ -57,14 +57,14 @@ export function dropGeometry(layout,count,{fontSize=23,logoSize=148}={}){
  if(layout==='card'){
   width=440;picture=104;logo=Math.round(clamp(requestedLogo*.28,28,56,41));title=text;
   // The fixed header and reward viewport do not move with the carousel. The
-  // body has room for a three-line name, two watch-time lines and two subtitle
-  // lines, including its padding and the two text gaps used by the renderer.
+  // body has room for a reward eyebrow, three-line name, two watch-time lines
+  // and two subtitle lines, including padding and the renderer's text gaps.
   const headerHeight=Math.ceil(Math.max(logo,2*title*1.25)+16);
-  const bodyHeight=Math.ceil(Math.max(picture,3*text*1.25+2*Math.max(12,text*.65)*1.25+2*12*1.35+16)+32);
+  const bodyHeight=Math.ceil(Math.max(picture,3*text*1.25+2*Math.max(12,text*.65)*1.25+2*12*1.35+32)+32),footerHeight=28;
   const viewport=box(0,headerHeight,width,bodyHeight);
-  height=headerHeight+bodyHeight+4;brand=box(0,0,width,headerHeight);
+  height=headerHeight+bodyHeight+footerHeight;brand=box(0,0,width,headerHeight);
   for(let i=0;i<n;i++)slots.push({...viewport});
-  return {width,height,brand,slots,viewport,headerHeight,picture,fontSize:text,logoSize:logo,titleSize:title,orientation:'row',panel:'whole',...(!n?{empty:{...viewport}}:{})};
+  return {width,height,brand,slots,viewport,headerHeight,footerHeight,picture,fontSize:text,logoSize:logo,titleSize:title,orientation:'row',panel:'whole',...(!n?{empty:{...viewport}}:{})};
  }else if(layout==='strip'){
   width=1200;const brandWidth=200;
   logo=Math.round(requestedLogo*.65);title=22;

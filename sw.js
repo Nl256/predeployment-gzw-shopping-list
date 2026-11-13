@@ -1,4 +1,4 @@
-const CACHE='predeployment-local-v14-twitch-card';
+const CACHE='predeployment-local-v15-pd-supply-card';
 const files=['./','./index.html','./overlay.html','./app.js','./shared.js','./storage.js','./obs-sync.js','./overlay.js','./styles.css','./logo.png','./type-model.js','./image-assets.js','./type-editor.js','./type-renderer.js','./drops-layout.js'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(files.map(file=>{const url=new URL(file,self.registration.scope);url.searchParams.set('release',CACHE);return new Request(url,{cache:'reload'});}))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('predeployment-local-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
