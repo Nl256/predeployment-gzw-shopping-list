@@ -1,6 +1,26 @@
 const clamp=(value,min,max,fallback)=>{const number=Number(value);return Number.isFinite(number)?Math.min(max,Math.max(min,number)):fallback;};
 const box=(x,y,width,height)=>({x,y,width,height});
 const PAD=16,GAP=12;
+const ease=t=>t*t*t*(t*(t*6-15)+10);
+
+// A shared clock keeps preview and OBS on the same slide, even after a reload.
+// Ease for the first part of each interval, then hold the names still to read.
+export function dropSlide(time,seconds){
+ const period=clamp(seconds,2,30,5)*1000,duration=Math.min(1100,period*.45);
+ const cycle=Number.isFinite(time)?Math.max(0,time)/period:0,step=Math.floor(cycle);
+ const t=Math.min(1,(cycle-step)*period/duration);
+ return {step,progress:ease(t)};
+}
+
+export function dropPosition(layout,from,to,progress){
+ let start=from,end=to,t=progress;
+ // Turn through the open quadrant rather than crossing the PD brand tile.
+ if(layout==='corner'&&from.x!==to.x&&from.y!==to.y){
+  const elbow={x:Math.max(from.x,to.x),y:Math.min(from.y,to.y)};
+  if(t<.5){end=elbow;t=ease(t*2);}else{start=elbow;t=ease((t-.5)*2);}
+ }
+ return {x:start.x+(end.x-start.x)*t,y:start.y+(end.y-start.y)*t};
+}
 
 // Brand boxes reserve room for an image, three title lines and three subtitle
 // lines. The renderer supplies padding:16px, gap:12px and a contained logo.

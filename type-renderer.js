@@ -1,13 +1,13 @@
 import {node} from './shared.js';
 import {imageBlob} from './image-assets.js';
 import {spinProgress} from './type-model.js';
-import {dropGeometry} from './drops-layout.js';
+import {dropGeometry,dropSlide,dropPosition} from './drops-layout.js';
 const NS='http://www.w3.org/2000/svg';
 const svg=(tag,attrs={})=>{const e=document.createElementNS(NS,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e;};
 export function createTypeRenderer(root,{key='',now=()=>Date.now(),fit=()=>{}}={}){
- let state,signature='',cards=[],rotor,result,raf,geometry=null,lastDropStep=-1;const images=new Map(),reduced=matchMedia('(prefers-reduced-motion: reduce)');
+ let state,signature='',cards=[],rotor,result,raf,geometry=null;const images=new Map(),reduced=matchMedia('(prefers-reduced-motion: reduce)');
  function imageURL(id){if(!images.has(id)){const entry={url:null};entry.promise=imageBlob(id,key).then(blob=>{entry.url=URL.createObjectURL(blob);return entry.url;}).catch(e=>{images.delete(id);signature='';throw e;});images.set(id,entry);}return images.get(id).promise;}
- function set(next){state=next;const roster=state.wheelSpin?.entries||state.wheelEntries;const sig=JSON.stringify([state.type,state.type==='drops'?state.drops:roster,state.wheelSpin?.id,state.fontSize,state.logoSize,state.dropLayout,state.title,state.subtitle]);if(sig===signature)return;signature=sig;root.replaceChildren();root.style.width='';root.style.height='';cards=[];rotor=null;result=null;geometry=null;lastDropStep=-1;
+ function set(next){state=next;const roster=state.wheelSpin?.entries||state.wheelEntries;const sig=JSON.stringify([state.type,state.type==='drops'?state.drops:roster,state.wheelSpin?.id,state.fontSize,state.logoSize,state.dropLayout,state.title,state.subtitle]);if(sig===signature)return;signature=sig;root.replaceChildren();root.style.width='';root.style.height='';cards=[];rotor=null;result=null;geometry=null;
   const used=new Set(state.type==='drops'?state.drops.map(d=>d.imageId):[]);for(const [id,entry] of images)if(!used.has(id)){entry.promise.then(url=>URL.revokeObjectURL(url)).catch(()=>{});images.delete(id);}
   if(state.type==='drops'){
    const custom=state.dropLayout!=='orbit';root.className='typed-content '+(custom?'drops-layout drops-'+state.dropLayout:'drops-orbit');
@@ -27,7 +27,7 @@ export function createTypeRenderer(root,{key='',now=()=>Date.now(),fit=()=>{}}={
   }else root.className='typed-content';fit();tick();
  }
  function tick(){cancelAnimationFrame(raf);if(!state||state.type==='list')return;
-  if(state.type==='drops'&&cards.length){const n=cards.length,rotating=state.rotateDrops&&!reduced.matches;if(geometry){const step=rotating?Math.floor(now()/(state.rotateSeconds*1000))%n:0;if(step!==lastDropStep){cards.forEach((card,i)=>place(card,geometry.slots[(i+step)%n]));lastDropStep=step;}}else{const phase=rotating?now()/(state.rotateSeconds*1000)*2*Math.PI/n:0;cards.forEach((card,i)=>{const angle=i*2*Math.PI/n+phase-Math.PI/2;const radius=n===1?0:184;card.style.transform=`translate(-50%,-50%) translate(${radius*Math.cos(angle)}px,${radius*Math.sin(angle)}px)`;});}}
+  if(state.type==='drops'&&cards.length){const n=cards.length,rotating=state.rotateDrops&&!reduced.matches;if(geometry){const {step,progress}=rotating?dropSlide(now(),state.rotateSeconds):{step:0,progress:0};cards.forEach((card,i)=>{const from=geometry.slots[(i+step)%n],to=geometry.slots[(i+step+1)%n],position=dropPosition(state.dropLayout,from,to,progress);card.style.width=from.width+'px';card.style.height=from.height+'px';card.style.transform=`translate(${position.x}px,${position.y}px)`;});}else{const phase=rotating?now()/(state.rotateSeconds*1000)*2*Math.PI/n:0;cards.forEach((card,i)=>{const angle=i*2*Math.PI/n+phase-Math.PI/2;const radius=n===1?0:184;card.style.transform=`translate(-50%,-50%) translate(${radius*Math.cos(angle)}px,${radius*Math.sin(angle)}px)`;});}}
   if(state.type==='wheel'&&rotor){const spin=state.wheelSpin;let angle=0,message=state.wheelEntries.length?'Ready to spin':'Add names to get started';if(spin){const elapsed=now()-spin.startedAt,t=Math.min(1,Math.max(0,elapsed/spin.duration)),ease=spinProgress(t,spin.mode);angle=spin.from+(spin.to-spin.from)*(reduced.matches?(t===1?1:0):ease);message=elapsed<0?'Starting in '+Math.max(1,Math.ceil(-elapsed/1000))+'…':t<1?'Spinning…':spin.winnerName;result.classList.toggle('has-winner',t>=1);result.dataset.winner=t>=1?spin.winnerId:'';}else{result.classList.remove('has-winner');result.dataset.winner='';}rotor.setAttribute('transform',`rotate(${angle},260,260)`);if(result.textContent!==message)result.textContent=message;}
   raf=requestAnimationFrame(tick);
  }
