@@ -12,6 +12,18 @@ export function dropSlide(time,seconds){
  return {step,progress:ease(t)};
 }
 
+// The card's progress remains linear for its whole viewing interval. A short
+// transition at the next interval always brings the following card from right
+// to left, including the last-to-first wrap; all clients share the same clock.
+export function dropCardFrame(time,seconds,count,{rotate=true,reduced=false}={}){
+ const n=Math.floor(clamp(count,0,12,0));
+ if(n<2||!rotate||reduced)return {current:0,previous:0,next:n>1?1:0,progress:0,slide:1};
+ const period=clamp(seconds,2,30,5)*1000;
+ const stamp=Number.isFinite(time)?Math.max(0,time):0;
+ const step=Math.floor(stamp/period),elapsed=stamp%period,current=step%n;
+ return {current,previous:(current+n-1)%n,next:(current+1)%n,progress:elapsed/period,slide:ease(Math.min(1,elapsed/350))};
+}
+
 export function dropPosition(layout,from,to,progress){
  let start=from,end=to,t=progress;
  // Turn through the open quadrant rather than crossing the PD brand tile.
@@ -30,8 +42,8 @@ function brandHeight(logoSize,titleSize,orientation){
  return Math.ceil(PAD*2+(orientation==='row'?Math.max(logoSize,textHeight):logoSize+GAP+textHeight));
 }
 
-/** Native-pixel positions for the four rectangular/corner reward layouts.
- * Images stay square; every slot reserves at least two caption lines beneath it.
+/** Native-pixel positions for reward layouts. The card carousel shares one
+ * clipped viewport; the other layouts show every square image and caption.
  * The transparent corner quadrant is deliberately outside all returned boxes.
  */
 export function dropGeometry(layout,count,{fontSize=23,logoSize=148}={}){
@@ -42,7 +54,18 @@ export function dropGeometry(layout,count,{fontSize=23,logoSize=148}={}){
  const cardHeight=picture=>picture+Math.ceil(2*text*1.25)+PAD*2;
  let width,height,brand,picture,logo,title,orientation='column',panel='whole',empty;
 
- if(layout==='strip'){
+ if(layout==='card'){
+  width=440;picture=104;logo=Math.round(clamp(requestedLogo*.28,28,56,41));title=text;
+  // The fixed header and reward viewport do not move with the carousel. The
+  // body has room for a three-line name, two watch-time lines and two subtitle
+  // lines, including its padding and the two text gaps used by the renderer.
+  const headerHeight=Math.ceil(Math.max(logo,2*title*1.25)+16);
+  const bodyHeight=Math.ceil(Math.max(picture,3*text*1.25+2*Math.max(12,text*.65)*1.25+2*12*1.35+16)+32);
+  const viewport=box(0,headerHeight,width,bodyHeight);
+  height=headerHeight+bodyHeight+4;brand=box(0,0,width,headerHeight);
+  for(let i=0;i<n;i++)slots.push({...viewport});
+  return {width,height,brand,slots,viewport,headerHeight,picture,fontSize:text,logoSize:logo,titleSize:title,orientation:'row',panel:'whole',...(!n?{empty:{...viewport}}:{})};
+ }else if(layout==='strip'){
   width=1200;const brandWidth=200;
   logo=Math.round(requestedLogo*.65);title=22;
   const brandH=brandHeight(logo,title,orientation),columns=Math.min(Math.max(n,1),6),rows=Math.ceil(Math.max(n,1)/columns);
