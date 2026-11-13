@@ -1,4 +1,4 @@
-export const TYPES={list:'Shopping list',drops:'Twitch drops',wheel:'Spin wheel'};
+export const TYPES={list:'Shopping list',drops:'Twitch drops',wheel:'Spin wheel',bingo:'Bingo'};
 export const DROP_LAYOUTS={orbit:'Circular orbit',strip:'Bottom strip',grid:'Reward grid',rail:'Side rail',corner:'Corner frame',card:'PD supply card'};
 export const PALETTE=['#b9bd76','#547e80','#a86c58','#7077ab','#639273','#b28a4d'];
 export const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -14,13 +14,26 @@ export function spinProgress(progress,mode='normal'){
 }
 export function entries(raw){const seen=new Set();return (Array.isArray(raw)?raw:[]).slice(0,40).filter(e=>e&&typeof e.name==='string'&&e.name.trim()).map((e,i)=>{let id=UUID.test(e.id)?e.id:crypto.randomUUID();if(seen.has(id))id=crypto.randomUUID();seen.add(id);return {id,name:e.name.trim().slice(0,60),color:color(e.color,PALETTE[i%PALETTE.length])};});}
 export function spinRotation(index,count,from=0){const target=(360-(index+.5)*360/count)%360;return from+360*6+((target-from%360+360)%360);}
-export function normalizeTypes(raw){
- const type=Object.hasOwn(TYPES,raw.type)?raw.type:'list';
+function normalizeBingo(raw){
+ const bingoSize=[3,4,5].includes(raw?.bingoSize)?raw.bingoSize:5,source=Array.isArray(raw?.bingoCells)?raw.bingoCells:[];
+ const bingoCells=Array.from({length:25},(_,index)=>{const cell=source[index],text=typeof cell?.text==='string'?cell.text.slice(0,120):'';return {text,marked:!!text.trim()&&cell?.marked===true};});
+ return {bingoSize,bingoCells};
+}
+export function bingoLines(state){
+ const {bingoSize:size,bingoCells:cells}=normalizeBingo(state),lines=[];
+ for(let row=0;row<size;row++)lines.push(Array.from({length:size},(_,column)=>row*size+column));
+ for(let column=0;column<size;column++)lines.push(Array.from({length:size},(_,row)=>row*size+column));
+ lines.push(Array.from({length:size},(_,index)=>index*size+index),Array.from({length:size},(_,index)=>index*size+size-1-index));
+ return lines.filter(line=>line.every(index=>cells[index].marked));
+}
+export function normalizeTypes(raw={}){
+ raw=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+ const type=typeof raw.type==='string'&&Object.hasOwn(TYPES,raw.type)?raw.type:'list';
  const drops=(Array.isArray(raw.drops)?raw.drops:[]).slice(0,12).filter(d=>d&&UUID.test(d.imageId)).map(d=>({id:UUID.test(d.id)?d.id:crypto.randomUUID(),imageId:d.imageId,name:String(d.name||'Reward').slice(0,80),watchTime:typeof d.watchTime==='string'?d.watchTime.trim().slice(0,60).trim():''}));
  const dropLayout=typeof raw.dropLayout==='string'&&Object.hasOwn(DROP_LAYOUTS,raw.dropLayout)?raw.dropLayout:'orbit';
  const wheelEntries=entries(raw.wheelEntries);let wheelSpin=null;const p=raw.wheelSpin;
  if(p&&UUID.test(p.id)&&Number.isFinite(p.startedAt)&&p.startedAt>0){const roster=entries(p.entries),winner=roster.find(e=>e.id===p.winnerId);if(winner){const from=limit(p.from,0,360000000,0);wheelSpin={id:p.id,mode:spinMode(p.mode),startedAt:p.startedAt,duration:limit(p.duration,6000,15000,8000),from,to:spinRotation(roster.indexOf(winner),roster.length,from),winnerId:winner.id,winnerName:winner.name,entries:roster,removeWinner:p.removeWinner===true,settled:p.settled===true};}}
- return {type,drops,dropLayout,rotateSeconds:limit(raw.rotateSeconds,2,30,5),rotateDrops:raw.rotateDrops!==false,wheelEntries,removeWinner:raw.removeWinner===true,spinSeconds:limit(raw.spinSeconds,6,15,8),wheelSpin};
+ return {type,drops,dropLayout,rotateSeconds:limit(raw.rotateSeconds,2,30,5),rotateDrops:raw.rotateDrops!==false,wheelEntries,removeWinner:raw.removeWinner===true,spinSeconds:limit(raw.spinSeconds,6,15,8),wheelSpin,...normalizeBingo(raw)};
 }
 export function randomIndex(count){if(!Number.isInteger(count)||count<1)throw new Error('Add at least one name.');const bound=Math.floor(4294967296/count)*count;let value;do{value=crypto.getRandomValues(new Uint32Array(1))[0];}while(value>=bound);return value%count;}
 export function spinActive(state,now=Date.now()){return !!state.wheelSpin&&now<state.wheelSpin.startedAt+state.wheelSpin.duration;}

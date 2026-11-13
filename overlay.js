@@ -2,12 +2,13 @@ import {createTypeRenderer} from './type-renderer.js';
 import {normalize,request,node,loadFont} from './shared.js';
 import {DEFAULT_TAB,localKey,readLocal} from './storage.js';
 import {dropGeometry} from './drops-layout.js';
+import {bingoGeometry} from './bingo-layout.js';
 const $=id=>document.getElementById(id),params=new URLSearchParams(location.hash.slice(1));
 const key=params.get('view')||'',isPreview=new URLSearchParams(location.search).has('preview'),isLocal=isPreview||new URLSearchParams(location.search).has('local');
 const requestedTab=new URLSearchParams(location.search).get('tab'),localTab=requestedTab===DEFAULT_TAB||/^[a-f0-9-]{36}$/.test(requestedTab||'')?requestedTab:DEFAULT_TAB;
 let clockOffset=0;const typed=createTypeRenderer($('typedContent'),{key:isLocal?'':key,now:()=>Date.now()+clockOffset,fit});
 let state=normalize(),page=0,last='',loadedVersion='',fontGeneration=0;
-function fit(){const card=$('overlayCard'),width=state.type==='drops'&&state.dropLayout!=='orbit'?dropGeometry(state.dropLayout,state.drops.length,state).width:576;card.style.width=width+'px';card.style.transform='none';const scale=Math.min((innerWidth-24)/width,(innerHeight-24)/card.offsetHeight,1);card.style.transform=`scale(${Math.max(.01,scale)})`}
+function fit(){const card=$('overlayCard'),width=state.type==='bingo'?bingoGeometry(state).width:state.type==='drops'&&state.dropLayout!=='orbit'?dropGeometry(state.dropLayout,state.drops.length,state).width:576;card.style.width=width+'px';card.style.transform='none';typed.fitText();const scale=Math.min((innerWidth-24)/width,(innerHeight-24)/card.offsetHeight,1);card.style.transform=`scale(${Math.max(.01,scale)})`}
 function render(){
  document.body.dataset.type=state.type;document.body.dataset.dropLayout=state.dropLayout;$('overlayItems').hidden=state.type!=='list';$('typedContent').hidden=state.type==='list';document.querySelector('.overlay-footer').hidden=state.type!=='list';document.querySelector('.progress-track').hidden=state.type!=='list';typed.set(state);
  document.documentElement.style.setProperty('--accent',state.accent);
@@ -15,6 +16,7 @@ function render(){
  const rgb=[1,3,5].map(i=>parseInt(state.backgroundColor.slice(i,i+2),16));
  $('overlayCard').style.background=`rgba(${rgb.join(',')},${state.opacity/100})`;
  document.body.style.setProperty('--drops-panel-fill',`rgba(${rgb.join(',')},${state.opacity/100})`);
+ document.body.style.setProperty('--bingo-panel-fill',`rgba(${rgb.join(',')},${state.opacity/100})`);
  $('overlayCard').style.borderColor=state.accent+'55';$('overlayCard').style.borderTopColor=state.accent;
  $('overlayTitle').textContent=state.title||'SHOPPING LIST';$('overlaySubtitle').textContent=state.subtitle;$('overlayLogo').style.height=state.logoSize+'px';
  const items=state.items.filter(i=>!state.hideCompleted||i.have<i.qty),pages=Math.max(1,Math.ceil(items.length/state.rows));page%=pages;
